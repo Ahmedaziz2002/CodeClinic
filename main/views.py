@@ -1,35 +1,39 @@
-from django.contrib.auth.models import User
+import logging
+
 from django.contrib import messages
 from django.contrib.auth import authenticate, login, logout
-from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib.auth.decorators import login_required
-from django.http import JsonResponse
-from django.db.models import Count, Avg
+from django.contrib.auth.models import User
+from django.db.models import Count, Avg, Q, F
 from django.db.models.functions import TruncDate
+from django.http import JsonResponse
+from django.shortcuts import render, redirect, get_object_or_404
+
+from decouple import config
+
+from google import genai
+from google.genai import types
 
 from .models import Problem, Solution, Comment, Vote
 
-from decouple import config
-import google.generativeai as genai
-import logging
 
 GENAI_API_KEY = config("GENAI_API_KEY", default=None)
+GENAI_MODEL = config("GENAI_MODEL", default="gemini-2.5-flash")
 
 AI_ENABLED = False
-MODEL = None
-GENAI_MODEL = config(
-    "GENAI_MODEL",
-    default="models/gemini-1.5-flash"
-)
+genai_client = None
 
 if GENAI_API_KEY:
     try:
-        genai.configure(api_key=GENAI_API_KEY)
-        MODEL = genai.GenerativeModel(GENAI_MODEL)
+        genai_client = genai.Client(api_key=GENAI_API_KEY)
         AI_ENABLED = True
     except Exception as e:
-        logging.error(f"Gemini init failed: {e}")
+        logging.error(f"GenAI initialization failed: {e}")
 
+GENERATION_CONFIG = types.GenerateContentConfig(
+    temperature=0.4,
+    max_output_tokens=800,
+)
 
 def signup(request):
     if request.method == "POST":
@@ -46,12 +50,7 @@ def signup(request):
             messages.error(request, "Username already exists")
             return redirect("signup")
 
-        User.objects.create_user(
-            username=username,
-            email=email,
-            password=password
-        )
-
+        User.objects.create_user(username=username, email=email, password=password)
         messages.success(request, "Account created. Please log in.")
         return redirect("login")
 
@@ -65,11 +64,9 @@ def user_login(request):
             username=request.POST.get("username"),
             password=request.POST.get("password")
         )
-
         if user:
             login(request, user)
             return redirect("home")
-
         messages.error(request, "Invalid credentials")
         return redirect("login")
 
@@ -79,6 +76,7 @@ def user_login(request):
 def user_logout(request):
     logout(request)
     return redirect("login")
+
 
 @login_required(login_url="login")
 def submit_problem(request):
@@ -100,26 +98,41 @@ def submit_problem(request):
                 f"{description}"
             )
 
-            topic_response = MODEL.generate_content(topic_prompt)
+            topic_response = genai_client.models.generate_content(
+                model=GENAI_MODEL,
+                contents=topic_prompt,
+                config=GENERATION_CONFIG,
+            )
             ai_topic = topic_response.text.strip()
 
-            if ai_topic not in [
+            VALID_TOPICS = {
                 "Arrays", "Strings", "Math", "Binary Search", "Graphs",
                 "Dynamic Programming", "Sorting", "Hashmaps", "Recursion", "Trees"
-            ]:
+            }
+            if ai_topic not in VALID_TOPICS:
                 ai_topic = "Uncategorized"
 
-            solution_prompt = (
-                "Solve the following coding problem clearly.\n"
-                "Explain the approach and provide code.\n\n"
-                f"{description}"
-            )
+            solution_prompt = f"""
+                You are a helpful programming assistant.
 
-            solution_response = MODEL.generate_content(solution_prompt)
+                Answer the user's question clearly and directly.
+                If the user asks for syntax, explain it simply with examples.
+                If the user asks for a concept, explain it intuitively.
+                If the user asks for code, provide correct and clean code.
+
+                User question:
+                {description}
+                """
+            solution_response = genai_client.models.generate_content(
+                model=GENAI_MODEL,
+                contents=solution_prompt,
+                config=GENERATION_CONFIG,
+            )
             ai_solution_text = solution_response.text.strip()
 
         except Exception as e:
-            ai_solution_text = f"AI error: {str(e)}"
+            logging.error(f"AI generation error: {e}")
+            ai_solution_text = "AI failed to generate a solution."
             ai_topic = "Unknown"
 
     problem = Problem.objects.create(
@@ -128,14 +141,47 @@ def submit_problem(request):
         topic=ai_topic
     )
 
+    def infer_answer_type(question: str) -> str:
+        q = question.lower()
+        if "example" in q or "sample" in q:
+            return "example"
+        if "explain" in q or "why" in q or "how does" in q:
+            return "explanation"
+        if "opinion" in q or "best" in q:
+            return "opinion"
+        return "direct"
+
+    answer_type = infer_answer_type(description)
+
     Solution.objects.create(
         problem=problem,
         content=ai_solution_text,
-        ai_generated=True
+        ai_generated=True,
+        answer_type=answer_type
     )
 
     return redirect("problem_detail", problem_id=problem.id)
-from django.db.models import Count, Q
+
+
+@login_required(login_url="login")
+def add_human_solution(request, problem_id):
+    if request.method == "POST":
+        problem = get_object_or_404(Problem, id=problem_id)
+        content = request.POST.get("content")
+
+        if content:
+            Solution.objects.create(
+                problem=problem,
+                content=content,
+                author=request.user,
+                ai_generated=False,
+                answer_type="direct"
+            )
+        else:
+            messages.error(request, "Solution cannot be empty.")
+
+    return redirect("problem_detail", problem_id=problem_id)
+
 
 def problem_detail(request, problem_id):
     problem = get_object_or_404(Problem, id=problem_id)
@@ -146,7 +192,13 @@ def problem_detail(request, problem_id):
             upvotes_count=Count("vote", filter=Q(vote__type="up")),
             downvotes_count=Count("vote", filter=Q(vote__type="down")),
         )
-        .prefetch_related("comments", "vote_set")
+        .order_by(
+            "-ai_generated",          
+            "answer_type",           
+            "-upvotes_count",
+            "downvotes_count",
+            "-created_at"
+        )
     )
 
     return render(request, "problem_detail.html", {
@@ -154,9 +206,11 @@ def problem_detail(request, problem_id):
         "solutions": solutions
     })
 
+
 def home(request):
     problems = Problem.objects.all().order_by("-created_at")
     return render(request, "index.html", {"problems": problems})
+
 
 @login_required(login_url="login")
 def add_comment(request, solution_id):
@@ -167,8 +221,8 @@ def add_comment(request, solution_id):
             content=request.POST.get("content"),
             author=request.user
         )
-
     return redirect("problem_detail", problem_id=solution.problem.id)
+
 
 @login_required(login_url="login")
 def vote_solution(request, solution_id, vote_type):
@@ -192,13 +246,6 @@ def vote_solution(request, solution_id, vote_type):
         "downvotes": Vote.objects.filter(solution=solution, type="down").count()
     })
 
-from django.contrib.auth.decorators import login_required
-from django.shortcuts import render
-from django.contrib.auth.models import User
-from django.db.models import Count, Avg, Q
-from django.db.models.functions import TruncDate
-
-from .models import Problem, Solution, Comment, Vote
 
 @login_required(login_url="login")
 def reports_dashboard(request):
@@ -224,35 +271,40 @@ def reports_dashboard(request):
     top_active_users = (
         User.objects
         .annotate(
-            solutions_posted=Count("solution", distinct=True),
+            human_solutions_posted=Count("solution", filter=Q(solution__ai_generated=False), distinct=True),
             comments_posted=Count("comment", distinct=True),
         )
         .annotate(
-            activity_score=Count("solution", distinct=True) +
-                           Count("comment", distinct=True)
+            activity_score=F("human_solutions_posted") + F("comments_posted")
         )
         .order_by("-activity_score")[:10]
     )
 
     ai_solutions = Solution.objects.filter(ai_generated=True).count()
-    human_solutions = Solution.objects.filter(ai_generated=False).count()
+    human_full_solutions = Solution.objects.filter(ai_generated=False).count()
 
     ai_votes = Vote.objects.filter(solution__ai_generated=True).count()
-    human_votes = Vote.objects.filter(solution__ai_generated=False).count()
+    human_votes_on_solutions = Vote.objects.filter(solution__ai_generated=False).count()
 
     ai_avg_votes = ai_votes / ai_solutions if ai_solutions else 0
-    human_avg_votes = human_votes / human_solutions if human_solutions else 0
+    human_avg_votes = human_votes_on_solutions / human_full_solutions if human_full_solutions else 0
 
-    ai_topic_breakdown = (
-        Solution.objects
-        .filter(ai_generated=True)
-        .values("problem__topic")
+    ai_type_breakdown = (
+        Solution.objects.filter(ai_generated=True)
+        .values("answer_type")
         .annotate(count=Count("id"))
         .order_by("-count")
     )
 
-    top_solutions = (
-        Solution.objects
+    human_type_breakdown = (
+        Solution.objects.filter(ai_generated=False)
+        .values("answer_type")
+        .annotate(count=Count("id"))
+        .order_by("-count")
+    )
+
+    top_ai_solutions = (
+        Solution.objects.filter(ai_generated=True)
         .annotate(
             upvotes=Count("vote", filter=Q(vote__type="up")),
             downvotes=Count("vote", filter=Q(vote__type="down")),
@@ -261,28 +313,37 @@ def reports_dashboard(request):
         .order_by("-score")[:10]
     )
 
+    top_human_solutions = (
+        Solution.objects.filter(ai_generated=False)
+        .annotate(
+            upvotes=Count("vote", filter=Q(vote__type="up")),
+            downvotes=Count("vote", filter=Q(vote__type="down")),
+        )
+        .annotate(score=Count("vote"))
+        .order_by("-score")[:10]
+    )
 
     best_users = (
         User.objects
         .annotate(
-            total_upvotes=Count("solution__vote", filter=Q(solution__vote__type="up")),
-            total_solutions=Count("solution", distinct=True),
-        )
-        .annotate(
-            avg_upvotes=Avg("total_upvotes")
+            total_upvotes=Count(
+                "solution__vote",
+                filter=Q(solution__vote__type="up", solution__ai_generated=False)
+            ),
+            total_solutions=Count("solution", filter=Q(solution__ai_generated=False), distinct=True),
         )
         .order_by("-total_upvotes")[:10]
     )
 
+    # Most active problems (human activity only)
     most_active_problems = (
         Problem.objects
         .annotate(
-            solution_count=Count("solutions", distinct=True),
+            solution_count=Count("solutions", filter=Q(solutions__ai_generated=False), distinct=True),
             comment_count=Count("solutions__comments", distinct=True),
         )
         .annotate(
-            activity_score=Count("solutions", distinct=True) +
-                           Count("solutions__comments", distinct=True)
+            activity_score=F("solution_count") + F("comment_count")
         )
         .order_by("-activity_score")[:10]
     )
@@ -299,13 +360,15 @@ def reports_dashboard(request):
         },
         "ai": {
             "ai_solutions": ai_solutions,
-            "human_solutions": human_solutions,
+            "human_solutions": human_full_solutions,
             "ai_avg_votes": ai_avg_votes,
             "human_avg_votes": human_avg_votes,
-            "ai_topic_breakdown": ai_topic_breakdown,
+            "ai_type_breakdown": ai_type_breakdown,
+            "human_type_breakdown": human_type_breakdown,
         },
         "oversight": {
-            "top_solutions": top_solutions,
+            "top_ai_solutions": top_ai_solutions,
+            "top_human_solutions": top_human_solutions,
             "best_users": best_users,
             "most_active_problems": most_active_problems,
         }

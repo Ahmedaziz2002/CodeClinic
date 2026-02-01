@@ -20,29 +20,52 @@
 
     <h3 class="section-title">Solutions</h3>
 
+    <!-- Human solution submission form -->
+    {% if user.is_authenticated %}
+        <div class="card submit-human-solution">
+            <h4>Add Your Answer</h4>
+            <form method="POST" action="{% url 'add_human_solution' problem.id %}">
+                {% csrf_token %}
+                <textarea name="content" placeholder="Write your solution here..." required></textarea>
+                <button type="submit">Submit Answer</button>
+            </form>
+        </div>
+    {% else %}
+        <p><a href="{% url 'login' %}">Log in</a> to add your own answer.</p>
+    {% endif %}
+
     {% for solution in solutions %}
         <div class="card solution-card {% if solution.ai_generated %}ai-solution{% else %}human-solution{% endif %}">
 
             <div class="solution-header">
-                <span class="badge {% if solution.ai_generated %}ai-badge{% else %}human-badge{% endif %}">
-                    {% if solution.ai_generated %}AI Generated{% else %}Human Answer{% endif %}
-                </span>
+                <div class="badges">
+                    <span class="badge {% if solution.ai_generated %}ai-badge{% else %}human-badge{% endif %}">
+                        {% if solution.ai_generated %}AI Generated{% else %}Community Answer{% endif %}
+                    </span>
+
+                    {% if solution.answer_type %}
+                        <span class="badge intent-badge intent-{{ solution.answer_type }}">
+                            {{ solution.get_answer_type_display }}
+                        </span>
+                    {% endif %}
+                </div>
+
                 {% if not solution.ai_generated %}
                     <span class="solution-meta">by {{ solution.author.username }}</span>
                 {% endif %}
             </div>
 
-    
-            <pre class="code-block">{{ solution.content }}</pre>
+            <div class="solution-body {% if solution.answer_type %}solution-{{ solution.answer_type }}{% endif %}">
+                <pre class="code-block">{{ solution.content }}</pre>
+            </div>
 
-           <div class="solution-votes">
+            <div class="solution-votes">
                 <button class="vote-btn upvote" onclick="voteSolution({{ solution.id }}, 'up')">👍</button>
                 <span id="upvotes-{{ solution.id }}">{{ solution.upvotes_count }}</span>
 
                 <button class="vote-btn downvote" onclick="voteSolution({{ solution.id }}, 'down')">👎</button>
                 <span id="downvotes-{{ solution.id }}">{{ solution.downvotes_count }}</span>
             </div>
-
 
             <h4 class="comment-title">Comments</h4>
             <div class="comment-section">
@@ -67,7 +90,9 @@
         <p class="no-items">No solutions yet.</p>
     {% endfor %}
 
-    <script>
+</div>
+
+<script>
 function voteSolution(solutionId, type) {
     fetch(`/vote/${solutionId}/${type}/`, {
         method: "POST",
@@ -83,7 +108,6 @@ function voteSolution(solutionId, type) {
     });
 }
 
-// CSRF helper
 function getCookie(name) {
     let cookieValue = null;
     if (document.cookie && document.cookie !== "") {
@@ -99,7 +123,5 @@ function getCookie(name) {
     return cookieValue;
 }
 </script>
-
-</div>
 
 {% endblock %}

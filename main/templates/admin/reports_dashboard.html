@@ -2,7 +2,6 @@
 
 {% block content %}
 <h1>CodeClinic Reports Dashboard</h1>
-
 <h2>Engagement</h2>
 <ul>
   <li>Total problems: {{ engagement.total_problems }}</li>
@@ -11,36 +10,86 @@
   <li>Total votes: {{ engagement.total_votes }}</li>
 </ul>
 
-<h3>Problems per topic</h3>
+<h2>AI vs Human Solutions</h2>
+<canvas id="solutionChart" width="400" height="200"></canvas>
+
 <ul>
-  {% for p in engagement.problems_per_topic %}
-    <li>{{ p.topic }}: {{ p.count }}</li>
+  <li>Total AI solutions: {{ ai.ai_solutions }}</li>
+  <li>Total Human solutions: {{ ai.human_solutions }}</li>
+  <li>Average votes per AI solution: {{ ai.ai_avg_votes|floatformat:2 }}</li>
+  <li>Average votes per Human solution: {{ ai.human_avg_votes|floatformat:2 }}</li>
+</ul>
+
+<h2>Top Solutions</h2>
+<div style="display:flex; gap:50px;">
+  <div>
+    <h4>Top AI Solutions</h4>
+    <ul>
+      {% for s in oversight.top_ai_solutions %}
+        <li>ID {{ s.id }} - Upvotes: {{ s.upvotes }} / Downvotes: {{ s.downvotes }} - Problem: "{{ s.problem.description|truncatechars:50 }}"</li>
+      {% empty %}
+        <li>No AI solutions yet.</li>
+      {% endfor %}
+    </ul>
+  </div>
+  <div>
+    <h4>Top Human Solutions</h4>
+    <ul>
+      {% for s in oversight.top_human_solutions %}
+        <li>ID {{ s.id }} - Upvotes: {{ s.upvotes }} / Downvotes: {{ s.downvotes }} - Problem: "{{ s.problem.description|truncatechars:50 }}"</li>
+      {% empty %}
+        <li>No human solutions yet.</li>
+      {% endfor %}
+    </ul>
+  </div>
+</div>
+
+<hr>
+
+<h2>Best Users (by Upvotes)</h2>
+<ul>
+  {% for u in oversight.best_users %}
+    <li>{{ u.username }} - Upvotes: {{ u.total_upvotes }} - Solutions: {{ u.total_solutions }}</li>
+  {% empty %}
+    <li>No users with contributions yet.</li>
   {% endfor %}
 </ul>
 
-<h3>Top active users</h3>
+<h2>Most Active Problems</h2>
 <ul>
-  {% for u in engagement.top_active_users %}
-    <li>{{ u.username }} - Activity Score: {{ u.activity_score }}</li>
+  {% for p in oversight.most_active_problems %}
+    <li>ID {{ p.id }} - Activity Score: {{ p.activity_score }} (Solutions: {{ p.solution_count }}, Comments: {{ p.comment_count }})</li>
+  {% empty %}
+    <li>No active problems yet.</li>
   {% endfor %}
 </ul>
-
-<h2>AI</h2>
-<ul>
-  <li>AI solutions: {{ ai.ai_solutions }}</li>
-  <li>Human solutions: {{ ai.human_solutions }}</li>
-  <li>Average AI votes: {{ ai.ai_avg_votes }}</li>
-  <li>Average human votes: {{ ai.human_avg_votes }}</li>
-</ul>
-
-<h2>Oversight</h2>
-<ul>
-  <li>Top solutions:</li>
-  <ul>
-    {% for s in oversight.top_solutions %}
-      <li>{{ s.id }} - Votes: {{ s.votes_count }}</li>
-    {% endfor %}
-  </ul>
-</ul>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+const ctx = document.getElementById('solutionChart').getContext('2d');
+const solutionChart = new Chart(ctx, {
+    type: 'pie',
+    data: {
+        labels: ['AI Solutions', 'Human Solutions'],
+        datasets: [{
+            label: 'Solution Count',
+            data: [{{ ai.ai_solutions }}, {{ ai.human_solutions }}],
+            backgroundColor: ['#36A2EB', '#FF6384'],
+            borderWidth: 1
+        }]
+    },
+    options: {
+        responsive: true,
+        plugins: {
+            legend: {
+                position: 'bottom'
+            },
+            title: {
+                display: true,
+                text: 'AI vs Human Solutions'
+            }
+        }
+    }
+});
+</script>
 
 {% endblock %}
