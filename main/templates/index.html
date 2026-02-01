@@ -1,0 +1,42 @@
+{% extends 'base.html' %}
+{% block title %}Home - CodeClinic{% endblock %}
+
+{% block content %}
+
+<div class="home-container">
+
+    <div class="card submit-card">
+        <h2>Submit a Coding Problem</h2>
+
+        <form method="POST" class="problem-form" action="{% url 'submit' %}">
+            {% csrf_token %}
+            <textarea name="description" placeholder="Describe your problem in detail..." required></textarea>
+            <button type="submit">Submit Problem</button>
+        </form>
+    </div>
+
+    <h3 class="section-title">Recently Submitted Problems</h3>
+
+    {% for problem in problems %}
+        <div class="card problem-card">
+            <h4>
+                <a href="{% url 'problem_detail' problem.id %}">
+                    {{ problem.description|truncatechars:60 }}
+                </a>
+            </h4>
+
+            <p>{{ problem.description|truncatechars:200 }}</p>
+
+            <div class="meta">
+                <span>By {{ problem.user.username }}</span>
+                <span>•</span>
+                <span>{{ problem.created_at|date:"M d, Y" }}</span>
+            </div>
+        </div>
+    {% empty %}
+        <p class="no-items">No problems submitted yet.</p>
+    {% endfor %}
+
+</div>
+
+{% endblock %}
