@@ -24,7 +24,12 @@
             <h4 class="section-subtitle">Add Your Answer</h4>
             <form method="POST" action="{% url 'add_human_solution' problem.id %}">
                 {% csrf_token %}
-                <textarea name="content" placeholder="Write your solution here..." required class="form-textarea"></textarea>
+                <textarea 
+                    name="content" 
+                    placeholder="Write your solution here..." 
+                    required 
+                    class="form-textarea large-textarea"
+                    rows="10"></textarea>
                 <button type="submit" class="btn btn-submit">Submit Answer</button>
             </form>
         </div>
