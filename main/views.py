@@ -51,6 +51,19 @@ def signup(request):
             return redirect("signup")
 
         User.objects.create_user(username=username, email=email, password=password)
+        from django.core.mail import send_mail
+
+
+        subject = "Welcome to CodeClinic!"
+        message = f"Hi {username},\n\nThank you for signing up at CodeClinic!"
+        from_email = None  # uses DEFAULT_FROM_EMAIL
+        recipient_list = [email]
+
+        try:
+            send_mail(subject, message, from_email, recipient_list)
+        except Exception as e:
+            logging.error(f"Failed to send signup email: {e}")
+
         messages.success(request, "Account created. Please log in.")
         return redirect("login")
 
