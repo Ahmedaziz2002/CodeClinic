@@ -1,4 +1,4 @@
-{% extends 'base.html' %}
+{% extends 'base.html' %} 
 {% load vote_tags %}
 
 {% block title %}Problem - CodeClinic{% endblock %}
@@ -7,9 +7,11 @@
 
 <div class="detail-container">
 
-    <!-- Problem Description -->
     <div class="card problem-detail-card">
-        <h2 class="problem-heading">{{ problem.description|truncatechars:70 }}</h2>
+        <div class="problem-header">
+            <h2 class="problem-heading">{{ problem.description|truncatechars:70 }}</h2>
+            {# Removed edit problem button #}
+        </div>
         <p class="full-description">{{ problem.description }}</p>
         <div class="meta">
             <span>Submitted by <strong>{{ problem.user.username }}</strong></span>
@@ -18,8 +20,7 @@
         </div>
     </div>
 
-    <!-- Add Human Solution -->
-    {% if user.is_authenticated %}
+    {% if user.is_authenticated and user != problem.user %}
     <div class="card submit-human-solution">
         <h4 class="section-subtitle">Add Your Answer</h4>
         <form method="POST" action="{% url 'add_human_solution' problem.id %}">
@@ -28,14 +29,12 @@
             <button type="submit" class="btn-submit">Submit Answer</button>
         </form>
     </div>
-    {% else %}
+    {% elif not user.is_authenticated %}
     <p class="login-prompt"><a href="{% url 'login' %}">Log in</a> to add your own answer.</p>
     {% endif %}
 
-    <!-- Solutions Side-by-Side Columns -->
     <div class="solutions-columns">
 
-        <!-- AI Solutions -->
         <div class="column ai-column">
             <h3>AI Solutions</h3>
             <div class="scrollable-column">
@@ -45,9 +44,9 @@
                         <div class="solution-header">
                             <span class="badge ai-badge">AI Generated</span>
                             {% if solution.answer_type %}
-                                <span class="badge intent-badge intent-{{ solution.answer_type }}">
-                                    {{ solution.get_answer_type_display }}
-                                </span>
+                            <span class="badge intent-badge intent-{{ solution.answer_type }}">
+                                {{ solution.get_answer_type_display }}
+                            </span>
                             {% endif %}
                         </div>
                         <div class="solution-body">
@@ -77,13 +76,10 @@
                         </form>
                     </div>
                     {% endif %}
-                {% empty %}
-                <p class="no-items">No AI solutions yet.</p>
                 {% endfor %}
             </div>
         </div>
 
-        <!-- Human Solutions -->
         <div class="column human-column">
             <h3>Human Solutions</h3>
             <div class="scrollable-column">
@@ -91,13 +87,21 @@
                     {% if not solution.ai_generated %}
                     <div class="card solution-card human-solution">
                         <div class="solution-header">
-                            <span class="badge human-badge">Community Answer</span>
-                            {% if solution.answer_type %}
+                            <div>
+                                <span class="badge human-badge">Community Answer</span>
+                                {% if solution.answer_type %}
                                 <span class="badge intent-badge intent-{{ solution.answer_type }}">
                                     {{ solution.get_answer_type_display }}
                                 </span>
-                            {% endif %}
-                            <span class="solution-meta">by {{ solution.author.username }}</span>
+                                {% endif %}
+                            </div>
+                            <div class="solution-actions">
+                                <span class="solution-meta">by {{ solution.author.username }}</span>
+                                {% if user == solution.author %}
+                                <a href="{% url 'edit_solution' solution.id %}" class="btn-small">Edit</a>
+                                <a href="{% url 'delete_solution' solution.id %}" class="btn-small danger">Delete</a>
+                                {% endif %}
+                            </div>
                         </div>
                         <div class="solution-body">
                             <pre class="code-block">{{ solution.content }}</pre>
@@ -126,8 +130,6 @@
                         </form>
                     </div>
                     {% endif %}
-                {% empty %}
-                <p class="no-items">No human solutions yet.</p>
                 {% endfor %}
             </div>
         </div>
@@ -155,16 +157,16 @@ function voteSolution(solutionId, type) {
 function getCookie(name) {
     let cookieValue = null;
     if (document.cookie && document.cookie !== "") {
-        const cookies = document.cookie.split(";");
+        const cookies = document.cookie.split(";")
         for (let i = 0; i < cookies.length; i++) {
-            const cookie = cookies[i].trim();
+            const cookie = cookies[i].trim()
             if (cookie.substring(0, name.length + 1) === (name + "=")) {
-                cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
-                break;
+                cookieValue = decodeURIComponent(cookie.substring(name.length + 1))
+                break
             }
         }
     }
-    return cookieValue;
+    return cookieValue
 }
 </script>
 

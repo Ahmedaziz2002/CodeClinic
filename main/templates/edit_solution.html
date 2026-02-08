@@ -1,0 +1,15 @@
+{% extends "base.html" %}
+
+{% block title %}Edit Solution{% endblock %}
+
+{% block content %}
+<div class="card form-card">
+    <h2>Edit Your Solution</h2>
+    <form method="POST">
+        {% csrf_token %}
+        <textarea name="content" required class="form-textarea large-textarea">{{ solution.content }}</textarea>
+        <button type="submit" class="btn-submit">Update Solution</button>
+        <a href="{% url 'problem_detail' solution.problem.id %}" class="btn-cancel">Cancel</a>
+    </form>
+</div>
+{% endblock %}

@@ -180,6 +180,11 @@ def submit_problem(request):
 def add_human_solution(request, problem_id):
     if request.method == "POST":
         problem = get_object_or_404(Problem, id=problem_id)
+
+        if problem.user == request.user:
+            messages.error(request, "You cannot submit a human solution to your own problem.")
+            return redirect("problem_detail", problem_id=problem_id)
+
         content = request.POST.get("content")
 
         if content:
@@ -194,6 +199,7 @@ def add_human_solution(request, problem_id):
             messages.error(request, "Solution cannot be empty.")
 
     return redirect("problem_detail", problem_id=problem_id)
+
 
 
 def problem_detail(request, problem_id):
@@ -218,6 +224,38 @@ def problem_detail(request, problem_id):
         "problem": problem,
         "solutions": solutions
     })
+
+
+@login_required(login_url="login")
+def edit_solution(request, solution_id):
+    solution = get_object_or_404(Solution, id=solution_id)
+
+    if solution.ai_generated or solution.author != request.user:
+        return redirect("problem_detail", problem_id=solution.problem.id)
+
+    if request.method == "POST":
+        content = request.POST.get("content")
+        if content:
+            solution.content = content
+            solution.save()
+            return redirect("problem_detail", problem_id=solution.problem.id)
+
+    return render(request, "edit_solution.html", {"solution": solution})
+
+
+@login_required(login_url="login")
+def delete_solution(request, solution_id):
+    solution = get_object_or_404(Solution, id=solution_id)
+
+    if solution.ai_generated or solution.author != request.user:
+        return redirect("problem_detail", problem_id=solution.problem.id)
+
+    if request.method == "POST":
+        problem_id = solution.problem.id
+        solution.delete()
+        return redirect("problem_detail", problem_id=problem_id)
+
+    return render(request, "delete_solution.html", {"solution": solution})
 
 
 def home(request):

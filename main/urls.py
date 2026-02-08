@@ -11,4 +11,6 @@ urlpatterns = [
     path('problem/<int:problem_id>/add_solution/', views.add_human_solution, name='add_human_solution'),
     path('add_comment/<int:solution_id>/', views.add_comment, name='add_comment'),
     path('vote/<int:solution_id>/<str:vote_type>/', views.vote_solution, name='vote_solution'),
+    path("solution/<int:solution_id>/edit/", views.edit_solution, name="edit_solution"),
+    path("solution/<int:solution_id>/delete/", views.delete_solution, name="delete_solution"),
 ]

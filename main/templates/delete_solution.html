@@ -1,0 +1,15 @@
+{% extends "base.html" %}
+
+{% block title %}Delete Solution{% endblock %}
+
+{% block content %}
+<div class="card form-card danger-zone">
+    <h2>Delete Solution</h2>
+    <p>This action cannot be undone.</p>
+    <form method="POST">
+        {% csrf_token %}
+        <button type="submit" class="btn-danger">Yes, Delete</button>
+        <a href="{% url 'problem_detail' solution.problem.id %}" class="btn-cancel">Cancel</a>
+    </form>
+</div>
+{% endblock %}
