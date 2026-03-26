@@ -1,0 +1,46 @@
+body {
+    font-family: 'Segoe UI', 'Roboto', sans-serif;
+    background-color: #f4f6f9;
+}
+
+.branding {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    padding: 1rem;
+    background: #fff;
+    border-bottom: 1px solid #e0e0e0;
+    border-radius: 8px;
+}
+
+.branding .logo {
+    height: 40px;
+}
+
+.nav-global {
+    display: flex;
+    gap: 1.5rem;
+    list-style: none;
+    margin: 0;
+    padding: 1rem;
+}
+
+.nav-global a {
+    text-decoration: none;
+    color: #2c3e50;
+    font-weight: 500;
+}
+
+.module, .dashboard-card {
+    background: #fff;
+    border-radius: 12px;
+    padding: 1rem;
+    margin-bottom: 1rem;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.1);
+    transition: transform 0.2s;
+}
+
+.dashboard-card:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+}

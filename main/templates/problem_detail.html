@@ -1,4 +1,4 @@
-{% extends 'base.html' %} 
+{% extends 'base.html' %}
 {% load vote_tags %}
 
 {% block title %}Problem - CodeClinic{% endblock %}
@@ -40,18 +40,22 @@
             <div class="scrollable-column">
                 {% for solution in solutions %}
                     {% if solution.ai_generated %}
-                    <div class="card solution-card ai-solution">
+                    <div id="solution-{{ solution.id }}" class="card solution-card ai-solution">
                         <div class="solution-header">
                             <span class="badge ai-badge">AI Generated</span>
                             {% if solution.answer_type %}
                             <span class="badge intent-badge intent-{{ solution.answer_type }}">
                                 {{ solution.get_answer_type_display }}
                             </span>
+                            <div class="solution-actions">
+                                <button class="btn-small" onclick="openSolutionModal({{ solution.id }})">View Full</button>
+                            </div>
                             {% endif %}
                         </div>
                         <div class="solution-body">
                             <pre class="code-block">{{ solution.content }}</pre>
                         </div>
+                    
                         <div class="solution-votes">
                             <button class="vote-btn upvote" onclick="voteSolution({{ solution.id }}, 'up')">👍</button>
                             <span id="upvotes-{{ solution.id }}">{{ solution.upvotes_count }}</span>
@@ -85,7 +89,7 @@
             <div class="scrollable-column">
                 {% for solution in solutions %}
                     {% if not solution.ai_generated %}
-                    <div class="card solution-card human-solution">
+                    <div id="solution-{{ solution.id }}" class="card solution-card human-solution">
                         <div class="solution-header">
                             <div>
                                 <span class="badge human-badge">Community Answer</span>
@@ -101,6 +105,7 @@
                                 <a href="{% url 'edit_solution' solution.id %}" class="btn-small">Edit</a>
                                 <a href="{% url 'delete_solution' solution.id %}" class="btn-small danger">Delete</a>
                                 {% endif %}
+                                <button class="btn-small" onclick="openSolutionModal({{ solution.id }})">View Full</button>
                             </div>
                         </div>
                         <div class="solution-body">
@@ -138,6 +143,14 @@
 
 </div>
 
+<!-- Modal for full solution view -->
+<div id="solution-modal" class="modal">
+    <div class="modal-content">
+        <span class="close" onclick="closeSolutionModal()">&times;</span>
+        <div id="modal-solution-body"></div>
+    </div>
+</div>
+
 <script>
 function voteSolution(solutionId, type) {
     fetch(`/vote/${solutionId}/${type}/`, {
@@ -168,6 +181,56 @@ function getCookie(name) {
     }
     return cookieValue
 }
+
+// Modal functions
+function openSolutionModal(solutionId) {
+    const solutionCard = document.getElementById(`solution-${solutionId}`);
+    const modal = document.getElementById('solution-modal');
+    const modalBody = document.getElementById('modal-solution-body');
+
+    modalBody.innerHTML = solutionCard.innerHTML;
+    modal.style.display = 'block';
+}
+
+function closeSolutionModal() {
+    document.getElementById('solution-modal').style.display = 'none';
+}
+
+// Close modal on outside click
+window.onclick = function(event) {
+    const modal = document.getElementById('solution-modal');
+    if (event.target == modal) {
+        modal.style.display = 'none';
+    }
+}
 </script>
+
+<style>
+/* Modal CSS */
+.modal {
+    display: none;
+    position: fixed;
+    z-index: 9999;
+    left: 0; top: 0;
+    width: 100%; height: 100%;
+    background-color: rgba(0,0,0,0.7);
+    overflow-y: auto;
+}
+.modal-content {
+    background: #f4f6fb;
+    margin: 3% auto;
+    padding: 20px;
+    border-radius: 12px;
+    max-width: 900px;
+    width: 90%;
+    box-shadow: 0 8px 25px rgba(0,0,0,0.2);
+}
+.close {
+    float: right;
+    font-size: 1.5rem;
+    font-weight: 700;
+    cursor: pointer;
+}
+</style>
 
 {% endblock %}

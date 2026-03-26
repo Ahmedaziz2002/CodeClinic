@@ -1,6 +1,8 @@
+# admin.py
 from django.contrib.admin import AdminSite
 from django.urls import path
-from .models import Problem, Solution, Comment, Vote
+from django.contrib.auth.decorators import login_required
+from .models import Problem, Solution, Comment, Vote, User
 from .views import reports_dashboard
 
 class MyAdminSite(AdminSite):
@@ -17,7 +19,7 @@ class MyAdminSite(AdminSite):
 
 admin_site = MyAdminSite(name="myadmin")
 
-# Register your models
+
 admin_site.register(Problem)
 admin_site.register(Solution)
 admin_site.register(Comment)

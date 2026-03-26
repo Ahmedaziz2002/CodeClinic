@@ -1,95 +1,112 @@
 {% extends "admin/base_site.html" %}
 
 {% block content %}
-<h1>CodeClinic Reports Dashboard</h1>
-<h2>Engagement</h2>
-<ul>
-  <li>Total problems: {{ engagement.total_problems }}</li>
-  <li>Total solutions: {{ engagement.total_solutions }}</li>
-  <li>Total comments: {{ engagement.total_comments }}</li>
-  <li>Total votes: {{ engagement.total_votes }}</li>
-</ul>
+<h1 style="text-align:center; margin-bottom:2rem;">CodeClinic Reports Dashboard</h1>
 
-<h2>AI vs Human Solutions</h2>
-<canvas id="solutionChart" width="400" height="200"></canvas>
-
-<ul>
-  <li>Total AI solutions: {{ ai.ai_solutions }}</li>
-  <li>Total Human solutions: {{ ai.human_solutions }}</li>
-  <li>Average votes per AI solution: {{ ai.ai_avg_votes|floatformat:2 }}</li>
-  <li>Average votes per Human solution: {{ ai.human_avg_votes|floatformat:2 }}</li>
-</ul>
-
-<h2>Top Solutions</h2>
-<div style="display:flex; gap:50px;">
-  <div>
-    <h4>Top AI Solutions</h4>
-    <ul>
-      {% for s in oversight.top_ai_solutions %}
-        <li>ID {{ s.id }} - Upvotes: {{ s.upvotes }} / Downvotes: {{ s.downvotes }} - Problem: "{{ s.problem.description|truncatechars:50 }}"</li>
-      {% empty %}
-        <li>No AI solutions yet.</li>
-      {% endfor %}
-    </ul>
-  </div>
-  <div>
-    <h4>Top Human Solutions</h4>
-    <ul>
-      {% for s in oversight.top_human_solutions %}
-        <li>ID {{ s.id }} - Upvotes: {{ s.upvotes }} / Downvotes: {{ s.downvotes }} - Problem: "{{ s.problem.description|truncatechars:50 }}"</li>
-      {% empty %}
-        <li>No human solutions yet.</li>
-      {% endfor %}
-    </ul>
-  </div>
+<!-- Export Buttons -->
+<div style="text-align:center; margin-bottom:2rem;">
+    <a href="{% url 'myadmin:reports_dashboard' %}?export=csv" class="button" 
+       style="margin-right:1rem; padding:0.5rem 1rem; background:#36A2EB; color:white; border-radius:5px;">
+        Export CSV
+    </a>
+    <a href="{% url 'myadmin:reports_dashboard' %}?export=pdf" class="button" 
+       style="padding:0.5rem 1rem; background:#FF6384; color:white; border-radius:5px;">
+        Export PDF
+    </a>
 </div>
 
-<hr>
+<div style="display:grid; grid-template-columns: repeat(auto-fit,minmax(250px,1fr)); gap:1rem;">
+    <div class="dashboard-card">
+        <h2>Engagement</h2>
+        <ul>
+            <li>Total problems: {{ engagement.total_problems }}</li>
+            <li>Total solutions: {{ engagement.total_solutions }}</li>
+            <li>Total comments: {{ engagement.total_comments }}</li>
+            <li>Total votes: {{ engagement.total_votes }}</li>
+        </ul>
+    </div>
+
+    <div class="dashboard-card" style="text-align:center;">
+        <h2>AI vs Human Solutions</h2>
+        <div style="width: 250px; height: 250px; margin: 0 auto;">
+            <canvas id="solutionChart"></canvas>
+        </div>
+        <ul style="margin-top:1rem;">
+            <li>Total AI solutions: {{ ai.ai_solutions }}</li>
+            <li>Total Human solutions: {{ ai.human_solutions }}</li>
+            <li>Avg votes per AI solution: {{ ai.ai_avg_votes|floatformat:2 }}</li>
+            <li>Avg votes per Human solution: {{ ai.human_avg_votes|floatformat:2 }}</li>
+        </ul>
+    </div>
+</div>
+
+<h2>Top Solutions</h2>
+<div style="display:flex; gap:1rem; flex-wrap:wrap;">
+    <div class="dashboard-card" style="flex:1; min-width:250px;">
+        <h4>Top AI Solutions</h4>
+        <ul>
+            {% for s in oversight.top_ai_solutions %}
+            <li>ID {{ s.id }} - Upvotes: {{ s.upvotes }} / Downvotes: {{ s.downvotes }} - Problem: "{{ s.problem.description|truncatechars:50 }}"</li>
+            {% empty %}
+            <li>No AI solutions yet.</li>
+            {% endfor %}
+        </ul>
+    </div>
+    <div class="dashboard-card" style="flex:1; min-width:250px;">
+        <h4>Top Human Solutions</h4>
+        <ul>
+            {% for s in oversight.top_human_solutions %}
+            <li>ID {{ s.id }} - Upvotes: {{ s.upvotes }} / Downvotes: {{ s.downvotes }} - Problem: "{{ s.problem.description|truncatechars:50 }}"</li>
+            {% empty %}
+            <li>No human solutions yet.</li>
+            {% endfor %}
+        </ul>
+    </div>
+</div>
 
 <h2>Best Users (by Upvotes)</h2>
-<ul>
-  {% for u in oversight.best_users %}
-    <li>{{ u.username }} - Upvotes: {{ u.total_upvotes }} - Solutions: {{ u.total_solutions }}</li>
-  {% empty %}
-    <li>No users with contributions yet.</li>
-  {% endfor %}
-</ul>
+<div class="dashboard-card">
+    <ul>
+        {% for u in oversight.best_users %}
+        <li>{{ u.username }} - Upvotes: {{ u.total_upvotes }} - Solutions: {{ u.total_solutions }}</li>
+        {% empty %}
+        <li>No users with contributions yet.</li>
+        {% endfor %}
+    </ul>
+</div>
 
 <h2>Most Active Problems</h2>
-<ul>
-  {% for p in oversight.most_active_problems %}
-    <li>ID {{ p.id }} - Activity Score: {{ p.activity_score }} (Solutions: {{ p.solution_count }}, Comments: {{ p.comment_count }})</li>
-  {% empty %}
-    <li>No active problems yet.</li>
-  {% endfor %}
-</ul>
+<div class="dashboard-card">
+    <ul>
+        {% for p in oversight.most_active_problems %}
+        <li>ID {{ p.id }} - Activity Score: {{ p.activity_score }} (Solutions: {{ p.solution_count }}, Comments: {{ p.comment_count }})</li>
+        {% empty %}
+        <li>No active problems yet.</li>
+        {% endfor %}
+    </ul>
+</div>
+
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <script>
 const ctx = document.getElementById('solutionChart').getContext('2d');
-const solutionChart = new Chart(ctx, {
+new Chart(ctx, {
     type: 'pie',
     data: {
-        labels: ['AI Solutions', 'Human Solutions'],
+        labels: ['AI Solutions','Human Solutions'],
         datasets: [{
-            label: 'Solution Count',
-            data: [{{ ai.ai_solutions }}, {{ ai.human_solutions }}],
-            backgroundColor: ['#36A2EB', '#FF6384'],
-            borderWidth: 1
+            data: [{{ ai.ai_solutions }},{{ ai.human_solutions }}],
+            backgroundColor: ['#36A2EB','#FF6384'],
+            borderWidth:1
         }]
     },
-    options: {
-        responsive: true,
-        plugins: {
-            legend: {
-                position: 'bottom'
-            },
-            title: {
-                display: true,
-                text: 'AI vs Human Solutions'
-            }
+    options:{
+        responsive:true,
+        maintainAspectRatio:false,
+        plugins:{
+            legend:{position:'bottom'},
+            title:{display:true,text:'AI vs Human Solutions'}
         }
     }
 });
 </script>
-
 {% endblock %}
