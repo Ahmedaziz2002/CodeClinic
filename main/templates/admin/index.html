@@ -1,0 +1,16 @@
+{% extends "admin/base_site.html" %}
+{% load static %}
+
+{% block content %}
+<h1>{{ site_header }}</h1>
+<div>
+    <p>Welcome to the management dashboard.</p>
+
+    <h2>Reports</h2>
+    <a href="{% url 'myadmin:reports_dashboard' %}" class="button">Go to Reports Dashboard</a>
+</div>
+
+<hr>
+
+{{ block.super }}
+{% endblock %}

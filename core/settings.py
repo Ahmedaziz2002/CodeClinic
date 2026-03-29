@@ -1,4 +1,3 @@
-
 """
 Django settings for core project.
 
@@ -15,7 +14,7 @@ SECRET_KEY = "django-insecure-)ro674fxx!uv4dd_(!!_6#4ed==qgor5jw#+aku+kg@_=e&a&"
 DEBUG = config('DEBUG', default=False, cast=bool)
 ALLOWED_HOSTS = []
 
-GOOGLE_APPLICATION_CREDENTIALS = config('GENAI_API_KEY')
+GENAI_API_KEY = config('GENAI_API_KEY')
 
 INSTALLED_APPS = [
     'django.contrib.admin',
@@ -26,7 +25,6 @@ INSTALLED_APPS = [
     'django.contrib.staticfiles',
     'main',
 ]
-
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
@@ -77,6 +75,9 @@ TIME_ZONE = 'UTC'
 USE_I18N = True
 USE_TZ = True
 
+AUTH_USER_MODEL = 'main.CustomUser'
+AUTHENTICATION_BACKENDS = ['main.authentication.EmailBackend']
+
 STATIC_URL = '/static/'
 STATICFILES_DIRS = [BASE_DIR / 'static']  
 STATIC_ROOT = BASE_DIR / 'staticfiles'
@@ -89,10 +90,12 @@ LOGIN_URL = 'login'
 LOGIN_REDIRECT_URL = 'home'
 LOGOUT_REDIRECT_URL = 'login'
 
-EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'
-EMAIL_HOST = 'smtp.example.com'        # replace with real SMTP in production
+EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
+EMAIL_HOST = 'smtp.gmail.com'
 EMAIL_PORT = 587
 EMAIL_USE_TLS = True
-EMAIL_HOST_USER = 'your-email@example.com'
-EMAIL_HOST_PASSWORD = 'your-email-password'
-DEFAULT_FROM_EMAIL = 'CodeClinic <no-reply@codeclinic.com>'
+EMAIL_HOST_USER = 'cliniccode7@gmail.com'
+EMAIL_HOST_PASSWORD = 'xpznjbwgxfvjqkqu'
+DEFAULT_FROM_EMAIL = 'CodeClinic <noreply@codeclinic.com>'
+
+EMAIL_VERIFICATION_URL = 'http://127.0.0.1:8000'

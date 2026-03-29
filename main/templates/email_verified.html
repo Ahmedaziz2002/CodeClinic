@@ -1,0 +1,12 @@
+{% extends 'base.html' %}
+{% block title %}Email Verified - CodeClinic{% endblock %}
+
+{% block content %}
+<div class="auth-container">
+    <div class="auth-card">
+        <h2>Email Verified!</h2>
+        <p>Your account has been successfully verified. You can now log in.</p>
+        <a href="{% url 'login' %}" class="btn">Go to Login</a>
+    </div>
+</div>
+{% endblock %}
