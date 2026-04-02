@@ -1,0 +1,81 @@
+{% extends 'base.html' %}
+{% block title %}Profile - CodeClinic{% endblock %}
+
+{% block content %}
+<section class="grid gap-8 xl:grid-cols-[0.95fr_1.05fr]">
+    <div class="rounded-[2rem] border border-white/10 bg-slate-900/80 p-8 shadow-2xl shadow-slate-950/40">
+        <div class="flex items-start gap-4">
+            <div class="flex h-20 w-20 items-center justify-center rounded-3xl border border-cyan-400/30 bg-cyan-400/10 text-3xl text-cyan-300">
+                <i class="ri-user-smile-line"></i>
+            </div>
+            <div>
+                <p class="text-sm uppercase tracking-[0.2em] text-cyan-300">Account Overview</p>
+                <h1 class="mt-2 text-3xl font-semibold text-white">{{ profile_user.username }}</h1>
+                <p class="mt-2 text-sm text-slate-400">{{ profile_user.email }}</p>
+                <div class="mt-4 flex flex-wrap gap-2">
+                    {% if stats.verified %}
+                        <span class="rounded-full bg-emerald-500/10 px-3 py-1 text-xs font-semibold uppercase tracking-[0.18em] text-emerald-300">Verified</span>
+                    {% else %}
+                        <span class="rounded-full bg-amber-500/10 px-3 py-1 text-xs font-semibold uppercase tracking-[0.18em] text-amber-300">Unverified</span>
+                    {% endif %}
+                    {% if profile_user.is_staff %}
+                        <span class="rounded-full bg-cyan-400/10 px-3 py-1 text-xs font-semibold uppercase tracking-[0.18em] text-cyan-300">Staff</span>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+
+        <div class="mt-8 grid gap-4 sm:grid-cols-2">
+            <div class="rounded-3xl border border-white/10 bg-slate-950/60 p-4">
+                <p class="text-sm text-slate-400">Problems created</p>
+                <p class="mt-2 text-3xl font-semibold text-white">{{ stats.problems_created }}</p>
+            </div>
+            <div class="rounded-3xl border border-white/10 bg-slate-950/60 p-4">
+                <p class="text-sm text-slate-400">Human contributions shared</p>
+                <p class="mt-2 text-3xl font-semibold text-white">{{ stats.human_contributions }}</p>
+            </div>
+            <div class="rounded-3xl border border-white/10 bg-slate-950/60 p-4">
+                <p class="text-sm text-slate-400">Accepted answers</p>
+                <p class="mt-2 text-3xl font-semibold text-white">{{ stats.accepted_answers }}</p>
+            </div>
+            <div class="rounded-3xl border border-white/10 bg-slate-950/60 p-4">
+                <p class="text-sm text-slate-400">Joined</p>
+                <p class="mt-2 text-lg font-semibold text-white">{{ profile_user.date_joined|date:"M d, Y" }}</p>
+            </div>
+        </div>
+    </div>
+
+    <div class="space-y-6">
+        <div class="rounded-[2rem] border border-white/10 bg-slate-900/80 p-6 shadow-xl shadow-slate-950/30">
+            <div class="mb-4 flex items-center justify-between">
+                <h2 class="text-xl font-semibold text-white">Recent Problems</h2>
+                <a href="{% url 'home' %}" class="text-sm font-medium text-cyan-300 hover:text-cyan-200">Start another thread</a>
+            </div>
+            <div class="space-y-3">
+                {% for problem in recent_problems %}
+                    <a href="{% url 'problem_detail' problem.id %}" class="block rounded-3xl border border-white/10 bg-slate-950/60 p-4 transition hover:border-cyan-400/40 hover:bg-slate-950">
+                        <p class="text-sm text-slate-400">{{ problem.created_at|date:"M d, Y" }}</p>
+                        <p class="mt-2 font-semibold text-white">{{ problem.description|truncatechars:90 }}</p>
+                    </a>
+                {% empty %}
+                    <p class="rounded-3xl border border-dashed border-white/15 px-5 py-8 text-center text-slate-500">No problems created yet.</p>
+                {% endfor %}
+            </div>
+        </div>
+
+        <div class="rounded-[2rem] border border-white/10 bg-slate-900/80 p-6 shadow-xl shadow-slate-950/30">
+            <h2 class="text-xl font-semibold text-white">Recent Community Contributions</h2>
+            <div class="mt-4 space-y-3">
+                {% for solution in recent_contributions %}
+                    <a href="{% url 'problem_detail' solution.problem.id %}" class="block rounded-3xl border border-white/10 bg-slate-950/60 p-4 transition hover:border-cyan-400/40 hover:bg-slate-950">
+                        <p class="text-sm text-slate-400">On: {{ solution.problem.description|truncatechars:55 }}</p>
+                        <p class="mt-2 text-white">{{ solution.content|truncatechars:110 }}</p>
+                    </a>
+                {% empty %}
+                    <p class="rounded-3xl border border-dashed border-white/15 px-5 py-8 text-center text-slate-500">No human contributions yet.</p>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+</section>
+{% endblock %}

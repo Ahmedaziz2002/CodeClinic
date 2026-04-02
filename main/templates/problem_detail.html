@@ -1,236 +1,138 @@
 {% extends 'base.html' %}
-{% load vote_tags %}
+{% load static %}
 
 {% block title %}Problem - CodeClinic{% endblock %}
 
 {% block content %}
-
-<div class="detail-container">
-
-    <div class="card problem-detail-card">
-        <div class="problem-header">
-            <h2 class="problem-heading">{{ problem.description|truncatechars:70 }}</h2>
-            {# Removed edit problem button #}
+<div
+    class="space-y-8"
+    data-problem-detail
+    data-problem-id="{{ problem.id }}"
+    data-ws-path="/ws/problems/{{ problem.id }}/"
+    data-solution-endpoint="{% url 'add_human_solution' problem.id %}"
+    data-is-owner="{% if user == problem.user %}true{% else %}false{% endif %}"
+>
+    <div class="rounded-[2rem] border border-white/10 bg-slate-900/80 p-8 shadow-2xl shadow-slate-950/40">
+        <div class="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+            <div>
+                <div class="flex flex-wrap items-center gap-3 text-xs uppercase tracking-[0.18em] text-slate-400">
+                    <span>{{ problem.topic|default:"Uncategorized" }}</span>
+                    <span>•</span>
+                    <span>{{ problem.created_at|date:"M d, Y" }}</span>
+                    {% if accepted_solution_id %}
+                        <span class="rounded-full bg-emerald-500/15 px-3 py-1 text-emerald-300">Resolved</span>
+                    {% else %}
+                        <span class="rounded-full bg-amber-400/15 px-3 py-1 text-amber-300">Open</span>
+                    {% endif %}
+                </div>
+                <h2 class="mt-4 text-3xl font-semibold tracking-tight text-white sm:text-4xl">{{ problem.description|truncatechars:120 }}</h2>
+            </div>
+            <div class="rounded-3xl border border-white/10 bg-slate-950/60 px-4 py-3 text-sm text-slate-300">
+                <p>Asked by <span class="font-semibold text-white">{{ problem.user.username }}</span></p>
+                {% if problem.accepted_solution and problem.accepted_solution.author %}
+                    <p class="mt-1">Accepted answer by <span class="font-semibold text-emerald-300">{{ problem.accepted_solution.author.username }}</span></p>
+                {% endif %}
+            </div>
         </div>
-        <p class="full-description">{{ problem.description }}</p>
-        <div class="meta">
-            <span>Submitted by <strong>{{ problem.user.username }}</strong></span>
-            <span>•</span>
-            <span>{{ problem.created_at|date:"M d, Y" }}</span>
+        <p class="mt-5 max-w-4xl text-base leading-7 text-slate-300">{{ problem.description }}</p>
+    </div>
+
+    <div class="grid gap-4 lg:grid-cols-[1fr_auto]">
+        <div class="rounded-[2rem] border border-white/10 bg-slate-900/70 p-5">
+            <div class="flex items-center justify-between">
+                <h3 class="text-lg font-semibold text-white">Active in This Thread</h3>
+                <span class="text-sm text-slate-400"><span data-active-user-count>{{ active_users|length }}</span> online</span>
+            </div>
+            <p class="mt-2 text-sm text-slate-400">Click a name to insert an `@mention` into your message.</p>
+            <div class="mt-4 flex flex-wrap gap-2" data-active-users-list>
+                {% for username in active_users %}
+                    <button type="button" class="rounded-full border border-cyan-400/30 px-3 py-2 text-sm text-cyan-300 hover:bg-cyan-400/10" data-mention-username="{{ username }}">@{{ username }}</button>
+                {% empty %}
+                    <p class="text-sm text-slate-500">No one else is active in this thread yet.</p>
+                {% endfor %}
+            </div>
+        </div>
+        <div class="rounded-[2rem] border border-white/10 bg-slate-900/70 p-5 text-sm text-slate-300">
+            <h3 class="text-lg font-semibold text-white">Human Collaboration</h3>
+            <p class="mt-2">Human answers stream live into the page over WebSockets. Presence updates now show who is currently viewing the thread, and clicking a user inserts an `@username` mention into your draft.</p>
         </div>
     </div>
 
-    {% if user.is_authenticated and user != problem.user %}
-    <div class="card submit-human-solution">
-        <h4 class="section-subtitle">Add Your Answer</h4>
-        <form method="POST" action="{% url 'add_human_solution' problem.id %}">
-            {% csrf_token %}
-            <textarea name="content" placeholder="Write your solution here..." required class="form-textarea large-textarea"></textarea>
-            <button type="submit" class="btn-submit">Submit Answer</button>
-        </form>
-    </div>
-    {% elif not user.is_authenticated %}
-    <p class="login-prompt"><a href="{% url 'login' %}">Log in</a> to add your own answer.</p>
+    {% if not user.is_authenticated %}
+        <p class="rounded-3xl border border-white/10 bg-slate-900/70 px-6 py-4 text-slate-300"><a href="{% url 'login' %}" class="font-semibold text-cyan-300 hover:text-cyan-200">Log in</a> to join the human conversation.</p>
     {% endif %}
 
-    <div class="solutions-columns">
+    <div class="grid gap-8 xl:grid-cols-2">
+        <section class="flex min-h-[42rem] flex-col rounded-[2rem] border border-emerald-500/20 bg-slate-900/80 p-6 shadow-xl shadow-slate-950/30">
+            <div class="flex items-start justify-between gap-4 border-b border-white/10 pb-5">
+                <div>
+                    <h3 class="text-xl font-semibold text-white">AI Conversation</h3>
+                    <p class="mt-2 text-sm leading-6 text-slate-400">A focused thread between the problem owner and the assistant, with memory preserved across follow-up prompts.</p>
+                </div>
+                <span class="rounded-full bg-emerald-500/15 px-3 py-1 text-xs font-semibold uppercase tracking-[0.2em] text-emerald-300">{{ thread_messages|length }} turn{{ thread_messages|length|pluralize }}</span>
+            </div>
 
-        <div class="column ai-column">
-            <h3>AI Solutions</h3>
-            <div class="scrollable-column">
-                {% for solution in solutions %}
-                    {% if solution.ai_generated %}
-                    <div id="solution-{{ solution.id }}" class="card solution-card ai-solution">
-                        <div class="solution-header">
-                            <span class="badge ai-badge">AI Generated</span>
-                            {% if solution.answer_type %}
-                            <span class="badge intent-badge intent-{{ solution.answer_type }}">
-                                {{ solution.get_answer_type_display }}
-                            </span>
-                            <div class="solution-actions">
-                                <button class="btn-small" onclick="openSolutionModal({{ solution.id }})">View Full</button>
-                            </div>
-                            {% endif %}
-                        </div>
-                        <div class="solution-body">
-                            <pre class="code-block">{{ solution.content }}</pre>
-                        </div>
-                    
-                        <div class="solution-votes">
-                            <button class="vote-btn upvote" onclick="voteSolution({{ solution.id }}, 'up')">👍</button>
-                            <span id="upvotes-{{ solution.id }}">{{ solution.upvotes_count }}</span>
-                            <button class="vote-btn downvote" onclick="voteSolution({{ solution.id }}, 'down')">👎</button>
-                            <span id="downvotes-{{ solution.id }}">{{ solution.downvotes_count }}</span>
-                        </div>
-                        <h4 class="comment-title">Comments</h4>
-                        <div class="comment-section">
-                            {% for comment in solution.comments.all %}
-                            <div class="comment">
-                                <strong>{{ comment.author.username }}</strong>: {{ comment.content }}
-                                <small class="comment-date">{{ comment.created_at|date:"M d, Y H:i" }}</small>
-                            </div>
-                            {% empty %}
-                            <p class="no-comments">No comments yet.</p>
-                            {% endfor %}
-                        </div>
-                        <form method="POST" action="{% url 'add_comment' solution.id %}" class="comment-form">
-                            {% csrf_token %}
-                            <input type="text" name="content" placeholder="Add a comment..." required class="form-input">
-                            <button type="submit" class="btn btn-comment">Comment</button>
-                        </form>
+            <div class="mt-5 flex-1 space-y-3 overflow-y-auto pr-2">
+                {% for message in thread_messages %}
+                    <div class="rounded-3xl border {% if message.role == 'assistant' %}border-emerald-500/20 bg-emerald-500/10{% else %}border-white/10 bg-slate-950/70{% endif %} p-4">
+                        <span class="text-xs font-semibold uppercase tracking-[0.2em] {% if message.role == 'assistant' %}text-emerald-300{% else %}text-slate-400{% endif %}">{{ message.get_role_display }}</span>
+                        <pre class="mt-3 whitespace-pre-wrap break-words font-sans text-sm leading-6 text-slate-200">{{ message.content }}</pre>
                     </div>
-                    {% endif %}
+                {% empty %}
+                    <p class="rounded-3xl border border-dashed border-white/15 px-6 py-8 text-center text-slate-500">No AI conversation yet.</p>
                 {% endfor %}
             </div>
-        </div>
 
-        <div class="column human-column">
-            <h3>Human Solutions</h3>
-            <div class="scrollable-column">
-                {% for solution in solutions %}
-                    {% if not solution.ai_generated %}
-                    <div id="solution-{{ solution.id }}" class="card solution-card human-solution">
-                        <div class="solution-header">
-                            <div>
-                                <span class="badge human-badge">Community Answer</span>
-                                {% if solution.answer_type %}
-                                <span class="badge intent-badge intent-{{ solution.answer_type }}">
-                                    {{ solution.get_answer_type_display }}
-                                </span>
-                                {% endif %}
-                            </div>
-                            <div class="solution-actions">
-                                <span class="solution-meta">by {{ solution.author.username }}</span>
-                                {% if user == solution.author %}
-                                <a href="{% url 'edit_solution' solution.id %}" class="btn-small">Edit</a>
-                                <a href="{% url 'delete_solution' solution.id %}" class="btn-small danger">Delete</a>
-                                {% endif %}
-                                <button class="btn-small" onclick="openSolutionModal({{ solution.id }})">View Full</button>
-                            </div>
-                        </div>
-                        <div class="solution-body">
-                            <pre class="code-block">{{ solution.content }}</pre>
-                        </div>
-                        <div class="solution-votes">
-                            <button class="vote-btn upvote" onclick="voteSolution({{ solution.id }}, 'up')">👍</button>
-                            <span id="upvotes-{{ solution.id }}">{{ solution.upvotes_count }}</span>
-                            <button class="vote-btn downvote" onclick="voteSolution({{ solution.id }}, 'down')">👎</button>
-                            <span id="downvotes-{{ solution.id }}">{{ solution.downvotes_count }}</span>
-                        </div>
-                        <h4 class="comment-title">Comments</h4>
-                        <div class="comment-section">
-                            {% for comment in solution.comments.all %}
-                            <div class="comment">
-                                <strong>{{ comment.author.username }}</strong>: {{ comment.content }}
-                                <small class="comment-date">{{ comment.created_at|date:"M d, Y H:i" }}</small>
-                            </div>
-                            {% empty %}
-                            <p class="no-comments">No comments yet.</p>
-                            {% endfor %}
-                        </div>
-                        <form method="POST" action="{% url 'add_comment' solution.id %}" class="comment-form">
-                            {% csrf_token %}
-                            <input type="text" name="content" placeholder="Add a comment..." required class="form-input">
-                            <button type="submit" class="btn btn-comment">Comment</button>
-                        </form>
-                    </div>
-                    {% endif %}
-                {% endfor %}
+            {% if user == problem.user %}
+                <form method="POST" action="{% url 'add_ai_message' problem.id %}" class="mt-5 border-t border-white/10 pt-5">
+                    {% csrf_token %}
+                    <textarea name="content" class="min-h-[140px] w-full rounded-3xl border border-white/10 bg-slate-950/80 px-5 py-4 text-white placeholder:text-slate-500 focus:border-emerald-400 focus:outline-none" placeholder="Ask a follow-up question..." required data-mention-target></textarea>
+                    <button type="submit" class="mt-4 rounded-full bg-emerald-400 px-5 py-3 font-semibold text-slate-950 hover:bg-emerald-300">Continue Chat</button>
+                </form>
+            {% endif %}
+        </section>
+
+        <section class="flex min-h-[42rem] flex-col rounded-[2rem] border border-cyan-400/20 bg-slate-900/80 p-6 shadow-xl shadow-slate-950/30">
+            <div class="flex items-start justify-between gap-4 border-b border-white/10 pb-5">
+                <div>
+                    <h3 class="text-xl font-semibold text-white">Human Conversation</h3>
+                    <p class="mt-2 text-sm leading-6 text-slate-400">Live community answers appear here instantly, so collaborators can work the problem together without refreshing.</p>
+                </div>
+                <span class="rounded-full bg-cyan-500/15 px-3 py-1 text-xs font-semibold uppercase tracking-[0.2em] text-cyan-300">{{ human_contributions|length }} contribution{{ human_contributions|length|pluralize }}</span>
             </div>
-        </div>
 
+            {% if user.is_authenticated and user != problem.user %}
+                <form method="POST" action="{% url 'add_human_solution' problem.id %}" class="mt-5 border-b border-white/10 pb-5" data-human-solution-form>
+                    {% csrf_token %}
+                    <textarea name="content" placeholder="Share a fix, walkthrough, code sample, or debugging path..." required class="min-h-[180px] w-full rounded-3xl border border-white/10 bg-slate-950/80 px-5 py-4 text-white placeholder:text-slate-500 focus:border-cyan-400 focus:outline-none" data-mention-target></textarea>
+                    <div class="mt-4 flex flex-wrap items-center gap-3">
+                        <button type="submit" class="rounded-full bg-cyan-400 px-5 py-3 font-semibold text-slate-950 hover:bg-cyan-300">Share Contribution</button>
+                        <p class="text-sm text-slate-400" data-human-solution-status></p>
+                    </div>
+                </form>
+            {% endif %}
+
+            <div class="mt-5 flex-1 overflow-y-auto pr-2">
+                <div class="space-y-4" id="human-solutions-list">
+                    {% for solution in human_contributions %}
+                        {% include 'partials/solution_card.html' with solution=solution %}
+                    {% empty %}
+                        <p class="rounded-3xl border border-dashed border-white/15 px-6 py-8 text-center text-slate-500" data-empty-human-solutions>No human contributions yet.</p>
+                    {% endfor %}
+                </div>
+            </div>
+        </section>
     </div>
-
 </div>
 
-<!-- Modal for full solution view -->
-<div id="solution-modal" class="modal">
-    <div class="modal-content">
-        <span class="close" onclick="closeSolutionModal()">&times;</span>
+<div id="solution-modal" class="fixed inset-0 z-50 hidden bg-slate-950/80 px-4 py-8">
+    <div class="mx-auto max-w-5xl rounded-[2rem] border border-white/10 bg-slate-900 p-6 shadow-2xl shadow-slate-950/50">
+        <span class="cursor-pointer text-2xl text-slate-300" data-close-solution-modal>&times;</span>
         <div id="modal-solution-body"></div>
     </div>
 </div>
+{% endblock %}
 
-<script>
-function voteSolution(solutionId, type) {
-    fetch(`/vote/${solutionId}/${type}/`, {
-        method: "POST",
-        headers: {
-            "X-CSRFToken": getCookie("csrftoken"),
-            "X-Requested-With": "XMLHttpRequest"
-        }
-    })
-    .then(response => response.json())
-    .then(data => {
-        document.getElementById(`upvotes-${solutionId}`).innerText = data.upvotes;
-        document.getElementById(`downvotes-${solutionId}`).innerText = data.downvotes;
-    });
-}
-
-function getCookie(name) {
-    let cookieValue = null;
-    if (document.cookie && document.cookie !== "") {
-        const cookies = document.cookie.split(";")
-        for (let i = 0; i < cookies.length; i++) {
-            const cookie = cookies[i].trim()
-            if (cookie.substring(0, name.length + 1) === (name + "=")) {
-                cookieValue = decodeURIComponent(cookie.substring(name.length + 1))
-                break
-            }
-        }
-    }
-    return cookieValue
-}
-
-// Modal functions
-function openSolutionModal(solutionId) {
-    const solutionCard = document.getElementById(`solution-${solutionId}`);
-    const modal = document.getElementById('solution-modal');
-    const modalBody = document.getElementById('modal-solution-body');
-
-    modalBody.innerHTML = solutionCard.innerHTML;
-    modal.style.display = 'block';
-}
-
-function closeSolutionModal() {
-    document.getElementById('solution-modal').style.display = 'none';
-}
-
-// Close modal on outside click
-window.onclick = function(event) {
-    const modal = document.getElementById('solution-modal');
-    if (event.target == modal) {
-        modal.style.display = 'none';
-    }
-}
-</script>
-
-<style>
-/* Modal CSS */
-.modal {
-    display: none;
-    position: fixed;
-    z-index: 9999;
-    left: 0; top: 0;
-    width: 100%; height: 100%;
-    background-color: rgba(0,0,0,0.7);
-    overflow-y: auto;
-}
-.modal-content {
-    background: #f4f6fb;
-    margin: 3% auto;
-    padding: 20px;
-    border-radius: 12px;
-    max-width: 900px;
-    width: 90%;
-    box-shadow: 0 8px 25px rgba(0,0,0,0.2);
-}
-.close {
-    float: right;
-    font-size: 1.5rem;
-    font-weight: 700;
-    cursor: pointer;
-}
-</style>
-
+{% block extra_js %}
+<script src="{% static 'js/problem_detail.js' %}"></script>
 {% endblock %}

@@ -2,29 +2,21 @@
 {% block title %}Sign Up - CodeClinic{% endblock %}
 
 {% block content %}
-<div class="auth-container">
-    <div class="auth-card">
-        <h2>Create Account</h2>
-        {% if messages %}
-            <ul class="messages">
-                {% for message in messages %}
-                    <li class="{{ message.tags }}">{{ message }}</li>
-                {% endfor %}
-            </ul>
-        {% endif %}
-
-        <form method="POST" class="auth-form">
+<div class="mx-auto max-w-md rounded-[2rem] border border-white/10 bg-slate-900/80 p-8 shadow-2xl shadow-slate-950/40">
+    <p class="text-sm uppercase tracking-[0.2em] text-cyan-300">Create account</p>
+    <h2 class="mt-3 text-3xl font-semibold text-white">Join Code Clinic</h2>
+    <p class="mt-2 text-sm text-slate-400">Create your account to start AI-assisted problem threads and contribute community solutions.</p>
+    <form method="POST" class="mt-8 space-y-4">
             {% csrf_token %}
-            <input type="text" name="username" placeholder="Username" required>
-            <input type="email" name="email" placeholder="Email" required>
-            <input type="password" name="password" placeholder="Password" required>
-            <input type="password" name="confirm_password" placeholder="Confirm Password" required>
-            <button type="submit">Sign Up</button>
-        </form>
-        <p class="auth-switch">
-            Already have an account?
-            <a href="{% url 'login' %}">Login</a>
-        </p>
-    </div>
+            <input type="text" name="username" placeholder="Username" required class="w-full rounded-2xl border border-white/10 bg-slate-950/80 px-4 py-3 text-white placeholder:text-slate-500 focus:border-cyan-400 focus:outline-none">
+            <input type="email" name="email" placeholder="Email" required class="w-full rounded-2xl border border-white/10 bg-slate-950/80 px-4 py-3 text-white placeholder:text-slate-500 focus:border-cyan-400 focus:outline-none">
+            <input type="password" name="password" placeholder="Password" required class="w-full rounded-2xl border border-white/10 bg-slate-950/80 px-4 py-3 text-white placeholder:text-slate-500 focus:border-cyan-400 focus:outline-none">
+            <input type="password" name="confirm_password" placeholder="Confirm Password" required class="w-full rounded-2xl border border-white/10 bg-slate-950/80 px-4 py-3 text-white placeholder:text-slate-500 focus:border-cyan-400 focus:outline-none">
+            <button type="submit" class="w-full rounded-full bg-cyan-400 px-5 py-3 font-semibold text-slate-950 hover:bg-cyan-300">Create Account</button>
+    </form>
+    <p class="mt-6 text-sm text-slate-400">
+        Already have an account?
+        <a href="{% url 'login' %}" class="font-semibold text-cyan-300 hover:text-cyan-200">Login</a>
+    </p>
 </div>
 {% endblock %}

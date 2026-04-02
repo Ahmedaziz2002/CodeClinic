@@ -4,44 +4,59 @@
 <head>
     <meta charset="UTF-8">
     <title>{% block title %}CodeClinic{% endblock %}</title>
-    
-    <!-- Google Fonts -->
+    <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap" rel="stylesheet">
-
-    <!-- Icons -->
     <link href="https://cdn.jsdelivr.net/npm/remixicon@4.2.0/fonts/remixicon.css" rel="stylesheet">
-
-    <!-- Stylesheet -->
     <link rel="stylesheet" href="{% static 'css/style.css' %}">
-
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    {% block extra_head %}{% endblock %}
 </head>
 
-<body>
-    <nav class="navbar">
-        <div class="nav-container">
-            <a href="{% url 'home' %}" class="logo">
-                <i class="ri-code-box-line"></i> CodeClinic
+<body class="min-h-screen bg-slate-950 text-slate-100 antialiased">
+    <div class="fixed inset-x-0 top-0 -z-10 h-[36rem] bg-[radial-gradient(circle_at_top,#22d3ee_0%,rgba(29,78,216,0.38)_22%,rgba(15,23,42,0.96)_58%,#020617_82%)]"></div>
+    <div class="fixed left-[-8rem] top-24 -z-10 h-72 w-72 rounded-full bg-cyan-400/10 blur-3xl"></div>
+    <div class="fixed right-[-5rem] top-40 -z-10 h-80 w-80 rounded-full bg-blue-500/10 blur-3xl"></div>
+    <nav class="sticky top-0 z-40 border-b border-white/10 bg-slate-950/75 backdrop-blur-xl">
+        <div class="mx-auto flex w-full max-w-7xl items-center justify-between px-6 py-4">
+            <a href="{% url 'home' %}" class="group flex items-center gap-3 text-lg font-semibold tracking-tight text-white">
+                <span class="flex h-11 w-11 items-center justify-center rounded-2xl border border-cyan-400/30 bg-cyan-400/10 text-cyan-300 shadow-lg shadow-cyan-500/10 transition group-hover:-translate-y-0.5 group-hover:border-cyan-300">
+                    <i class="ri-code-box-line text-xl"></i>
+                </span>
+                <span class="flex flex-col">
+                    <span>CodeClinic</span>
+                    <span class="text-xs font-medium uppercase tracking-[0.22em] text-slate-500">AI + Community</span>
+                </span>
             </a>
 
-            <ul class="nav-links">
+            <ul class="flex items-center gap-4 text-sm text-slate-300">
                 {% if user.is_authenticated %}
-                    <li><a href="#"><i class="ri-user-line"></i> {{ user.username }}</a></li>
-                    <li><a href="{% url 'logout' %}" class="logout-btn">Logout</a></li>
+                    <li><a href="{% url 'profile' %}" class="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/[0.03] px-4 py-2.5 shadow-lg shadow-slate-950/20 transition hover:-translate-y-0.5 hover:border-cyan-400 hover:bg-cyan-400/10 hover:text-white"><i class="ri-user-line"></i> {{ user.username }}</a></li>
+                    {% if user.is_staff %}
+                        <li><a href="{% url 'myadmin:index' %}" class="rounded-full border border-cyan-400/50 bg-cyan-400/10 px-4 py-2.5 text-cyan-300 transition hover:-translate-y-0.5 hover:bg-cyan-400/20 hover:text-cyan-200">Admin</a></li>
+                    {% endif %}
+                    <li><a href="{% url 'logout' %}" class="rounded-full bg-rose-500/10 px-4 py-2.5 font-medium text-rose-300 transition hover:-translate-y-0.5 hover:bg-rose-500/20">Logout</a></li>
                 {% else %}
-                    <li><a href="{% url 'login' %}">Login</a></li>
-                    <li><a href="{% url 'signup' %}" class="signup-btn">Sign Up</a></li>
+                    <li><a href="{% url 'login' %}" class="rounded-full border border-white/10 bg-white/[0.03] px-4 py-2.5 transition hover:-translate-y-0.5 hover:border-cyan-400 hover:text-white">Login</a></li>
+                    <li><a href="{% url 'signup' %}" class="rounded-full bg-cyan-400 px-4 py-2.5 font-semibold text-slate-950 shadow-lg shadow-cyan-500/20 transition hover:-translate-y-0.5 hover:bg-cyan-300">Sign Up</a></li>
                 {% endif %}
             </ul>
         </div>
     </nav>
 
-    <main class="content">
+    <main class="mx-auto w-full max-w-7xl px-6 py-10">
+        {% if messages %}
+            <div class="mb-6 grid gap-3">
+                {% for message in messages %}
+                    <div class="rounded-2xl border border-white/10 px-4 py-3 text-sm shadow-lg shadow-slate-950/30 {% if message.tags == 'error' %}bg-rose-500/10 text-rose-200{% elif message.tags == 'success' %}bg-emerald-500/10 text-emerald-200{% else %}bg-slate-900/80 text-slate-200{% endif %}">{{ message }}</div>
+                {% endfor %}
+            </div>
+        {% endif %}
         {% block content %}{% endblock %}
     </main>
 
-    <footer class="footer">
-        <p>© {{ now|date:"Y" }} CodeClinic • Empowering Developers</p>
+    <footer class="border-t border-white/10 py-8 text-center text-sm text-slate-400">
+        <p>© {% now "Y" %} CodeClinic • AI + community support for developers</p>
     </footer>
+    {% block extra_js %}{% endblock %}
 </body>
 </html>

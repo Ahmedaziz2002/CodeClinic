@@ -1,238 +1,257 @@
-import logging
-import uuid
-from django.contrib import messages
-from django.contrib.auth import authenticate, login, logout
-from django.contrib.auth.decorators import login_required
-from django.shortcuts import render, redirect, get_object_or_404
-from django.core.mail import send_mail
-from django.http import JsonResponse, HttpResponse
-from django.db.models import Count, Q, F
-from django.db.models.functions import TruncDate
-from io import BytesIO
 import csv
+import logging
+from io import BytesIO
+
+from django.contrib import messages
+from django.core.exceptions import PermissionDenied
+from django.contrib.auth import authenticate, login, logout
+from django.contrib.auth.tokens import default_token_generator
+from django.contrib.auth.decorators import login_required
+from django.contrib.admin.views.decorators import staff_member_required
+from django.contrib.auth import get_user_model
+from django.http import Http404, HttpResponse, JsonResponse
+from django.shortcuts import get_object_or_404, redirect, render
+from django.utils.encoding import force_str
+from django.utils.http import urlsafe_base64_decode
 from reportlab.pdfgen import canvas
-from .models import Problem, Solution, Comment, Vote, CustomUser, EmailVerification
-from decouple import config
-from google import genai
-from google.genai import types
 
-GENAI_API_KEY = config("GENAI_API_KEY", default=None)
-GENAI_MODEL = config("GENAI_MODEL", default="gemini-2.5-flash")
-
-AI_ENABLED = False
-genai_client = None
-
-if GENAI_API_KEY:
-    try:
-        genai_client = genai.Client(api_key=GENAI_API_KEY)
-        AI_ENABLED = True
-    except Exception as e:
-        logging.error(f"GenAI initialization failed: {e}")
-
-GENERATION_CONFIG = types.GenerateContentConfig(
-    temperature=0.4,
-    max_output_tokens=800,
+from .models import Comment, CustomUser, Problem, Solution, Vote
+from .services import (
+    build_reports_context,
+    continue_problem_thread,
+    create_account,
+    create_human_solution,
+    create_problem_with_ai_response,
+    get_problem_detail_context,
+    list_recent_problems,
+    send_password_reset_email,
+    send_verification_email,
 )
+
+logger = logging.getLogger(__name__)
+
 
 def signup(request):
     if request.method == "POST":
-        username = request.POST.get("username")
-        email = request.POST.get("email")
-        password = request.POST.get("password")
-        confirm = request.POST.get("confirm_password")
+        username = request.POST.get("username", "").strip()
+        email = request.POST.get("email", "").strip().lower()
+        password = request.POST.get("password", "")
+        confirm = request.POST.get("confirm_password", "")
+
         if password != confirm:
-            messages.error(request, "Passwords do not match")
+            messages.error(request, "Passwords do not match.")
             return redirect("signup")
-        if CustomUser.objects.filter(email=email).exists():
-            messages.error(request, "Email already exists")
+        if not username or not email:
+            messages.error(request, "Username and email are required.")
             return redirect("signup")
-
-        user = CustomUser.objects.create_user(
-            username=username, email=email, password=password, is_active=True, is_verified=True
-        )
-
-        token = str(uuid.uuid4())
-        EmailVerification.objects.create(user=user, token=token)
-
-        subject = "Welcome to CodeClinic!"
-        message = f"Hi {username},\n\nYour account has been successfully created. You can now log in using your email and password."
-        recipient_list = [email]
+        if CustomUser.objects.filter(email__iexact=email).exists():
+            messages.error(request, "Email already exists.")
+            return redirect("signup")
 
         try:
-            send_mail(subject, message, None, recipient_list)
-        except Exception as e:
-            logging.error(f"Failed to send email: {e}")
-            messages.error(request, "Account created but failed to send email.")
+            user, email_sent = create_account(username=username, email=email, password=password)
+        except Exception:
+            logger.exception("Account creation failed")
+            messages.error(request, "We could not create your account right now.")
             return redirect("signup")
 
-        messages.success(request, "Account created and email sent successfully. You can now log in.")
+        if email_sent:
+            messages.success(request, "Account created successfully. You can now log in using your email and password.")
+        else:
+            messages.warning(request, "Account created successfully. You can log in now using your email and password, but the email message could not be sent.")
         return redirect("login")
 
     return render(request, "signup.html")
-     
+
 
 def verify_email(request, token):
-    try:
-        ev = EmailVerification.objects.get(token=token)
-        user = ev.user
-        user.is_active = True
-        user.is_verified = True
-        user.save()
-        ev.delete()
-        return render(request, "email_verified.html", {"user": user})
-    except EmailVerification.DoesNotExist:
-        messages.error(request, "Invalid or expired verification link.")
-        return redirect("signup")
+    messages.info(request, "Your account is already active. You can log in directly with your email and password.")
+    return redirect("login")
+
 
 def user_login(request):
     if request.method == "POST":
-        email = request.POST.get("email")
+        email = request.POST.get("email", "").strip().lower()
         password = request.POST.get("password")
         user = authenticate(request, email=email, password=password)
+        if user is None and email and password:
+            candidate = CustomUser.objects.filter(email__iexact=email).first()
+            if candidate and candidate.check_password(password):
+                if not candidate.is_active or not candidate.is_verified:
+                    candidate.is_active = True
+                    candidate.is_verified = True
+                    candidate.save(update_fields=["is_active", "is_verified"])
+                user = candidate
         if user:
-            if not user.is_verified:
-                messages.error(request, "Please verify your email before logging in.")
-                return redirect("login")
-            login(request, user)
+            login(request, user, backend="main.authentication.EmailBackend")
             return redirect("home")
-        messages.error(request, "Invalid credentials")
+        messages.error(request, "Invalid credentials.")
         return redirect("login")
     return render(request, "login.html")
+
+
+def resend_verification(request):
+    if request.method == "POST":
+        email = request.POST.get("email", "").strip()
+        user = CustomUser.objects.filter(email__iexact=email).first()
+        if user:
+            try:
+                send_verification_email(user=user)
+            except Exception:
+                logger.exception("Resend verification email failed")
+        messages.success(
+            request,
+            "If that account exists, a sign-in reminder email has been sent.",
+        )
+        return redirect("login")
+    return render(request, "resend_verification.html")
+
 
 def user_logout(request):
     logout(request)
     return redirect("login")
+
+
+def forgot_password(request):
+    if request.method == "POST":
+        email = request.POST.get("email", "").strip()
+        user = CustomUser.objects.filter(email__iexact=email).first()
+        if user:
+            try:
+                send_password_reset_email(user=user)
+            except Exception:
+                logger.exception("Password reset email failed")
+        return render(request, "password_reset_sent.html")
+    return render(request, "forgot_password.html")
+
+
+def reset_password(request, uidb64, token):
+    try:
+        user_id = force_str(urlsafe_base64_decode(uidb64))
+        user = get_user_model().objects.get(pk=user_id)
+    except (TypeError, ValueError, OverflowError, get_user_model().DoesNotExist):
+        user = None
+
+    if not user or not default_token_generator.check_token(user, token):
+        messages.error(request, "This password reset link is invalid or has expired.")
+        return redirect("forgot_password")
+
+    if request.method == "POST":
+        password = request.POST.get("password", "")
+        confirm = request.POST.get("confirm_password", "")
+        if not password or password != confirm:
+            messages.error(request, "Passwords do not match.")
+            return redirect("reset_password", uidb64=uidb64, token=token)
+        user.set_password(password)
+        user.save(update_fields=["password"])
+        messages.success(request, "Password reset successful. You can now log in.")
+        return redirect("login")
+
+    return render(request, "reset_password.html", {"uidb64": uidb64, "token": token})
+
 
 @login_required(login_url="login")
 def submit_problem(request):
     if request.method != "POST":
         return redirect("home")
 
-    description = request.POST.get("description")
+    description = request.POST.get("description", "").strip()
+    if not description:
+        messages.error(request, "Problem description cannot be empty.")
+        return redirect("home")
 
-    ai_solution_text = "⚠️ AI service unavailable."
-    ai_topic = "Uncategorized"
-
-    if AI_ENABLED:
-        try:
-            topic_prompt = (
-                "Classify this coding problem into ONE topic from:\n"
-                "[Arrays, Strings, Math, Binary Search, Graphs, "
-                "Dynamic Programming, Sorting, Hashmaps, Recursion, Trees]\n\n"
-                "Return ONLY the topic name.\n\n"
-                f"{description}"
-            )
-
-            topic_response = genai_client.models.generate_content(
-                model=GENAI_MODEL,
-                contents=topic_prompt,
-                config=GENERATION_CONFIG,
-            )
-
-            ai_topic = topic_response.text.strip()
-
-            VALID_TOPICS = {
-                "Arrays", "Strings", "Math", "Binary Search", "Graphs",
-                "Dynamic Programming", "Sorting", "Hashmaps", "Recursion", "Trees"
-            }
-
-            if ai_topic not in VALID_TOPICS:
-                ai_topic = "Uncategorized"
-
-            solution_prompt = f"""
-You are a helpful programming assistant.
-
-Answer clearly and directly.
-
-- If it's code → give clean working code
-- If it's concept → explain intuitively
-- If it's syntax → include examples
-
-User question:
-{description}
-"""
-
-            solution_response = genai_client.models.generate_content(
-                model=GENAI_MODEL,
-                contents=solution_prompt,
-                config=GENERATION_CONFIG,
-            )
-
-            ai_solution_text = solution_response.text.strip()
-
-        except Exception as e:
-            logging.error(f"AI generation error: {e}")
-            ai_solution_text = "⚠️ AI failed to generate a solution."
-            ai_topic = "Unknown"
-
-
-    problem = Problem.objects.create(
-        user=request.user,
-        description=description,
-        topic=ai_topic
-    )
-
-
-    def infer_answer_type(question: str) -> str:
-        q = question.lower()
-        if "example" in q or "sample" in q:
-            return "example"
-        if "explain" in q or "why" in q or "how does" in q:
-            return "explanation"
-        if "opinion" in q or "best" in q:
-            return "opinion"
-        return "direct"
-
-    answer_type = infer_answer_type(description)
-
-    Solution.objects.create(
-        problem=problem,
-        content=ai_solution_text,
-        ai_generated=True,   # ✅ MUST be True
-        answer_type=answer_type
-    )
-
+    problem = create_problem_with_ai_response(user=request.user, description=description)
     return redirect("problem_detail", problem_id=problem.id)
+
+
+@login_required(login_url="login")
+def add_ai_message(request, problem_id):
+    if request.method != "POST":
+        return redirect("problem_detail", problem_id=problem_id)
+
+    problem = get_object_or_404(Problem.objects.select_related("user"), id=problem_id)
+    if problem.user != request.user:
+        messages.error(request, "Only the problem owner can continue the AI conversation.")
+        return redirect("problem_detail", problem_id=problem.id)
+
+    content = request.POST.get("content", "").strip()
+    if not content:
+        messages.error(request, "Follow-up message cannot be empty.")
+        return redirect("problem_detail", problem_id=problem.id)
+
+    continue_problem_thread(problem=problem, user=request.user, content=content)
+    return redirect("problem_detail", problem_id=problem.id)
+
 
 @login_required(login_url="login")
 def add_human_solution(request, problem_id):
-    if request.method == "POST":
-        problem = get_object_or_404(Problem, id=problem_id)
-        if problem.user == request.user:
-            messages.error(request, "You cannot submit a human solution to your own problem.")
-            return redirect("problem_detail", problem_id=problem_id)
-        content = request.POST.get("content")
-        if content:
-            Solution.objects.create(problem=problem, content=content, author=request.user, ai_generated=False, answer_type="direct")
-        else:
-            messages.error(request, "Solution cannot be empty.")
+    if request.method != "POST":
+        return redirect("problem_detail", problem_id=problem_id)
+
+    problem = get_object_or_404(Problem.objects.select_related("user"), id=problem_id)
+    if problem.user == request.user:
+        error_message = "You cannot submit a human contribution to your own problem."
+        if request.headers.get("x-requested-with") == "XMLHttpRequest":
+            return JsonResponse({"error": error_message}, status=400)
+        messages.error(request, error_message)
+        return redirect("problem_detail", problem_id=problem_id)
+
+    content = request.POST.get("content", "").strip()
+    if not content:
+        error_message = "Contribution cannot be empty."
+        if request.headers.get("x-requested-with") == "XMLHttpRequest":
+            return JsonResponse({"error": error_message}, status=400)
+        messages.error(request, error_message)
+        return redirect("problem_detail", problem_id=problem_id)
+
+    solution = create_human_solution(problem=problem, author=request.user, content=content, request=request)
+    if request.headers.get("x-requested-with") == "XMLHttpRequest":
+        return JsonResponse({"message": "Contribution submitted.", "solution_id": solution.id}, status=201)
+
     return redirect("problem_detail", problem_id=problem_id)
 
+
 def problem_detail(request, problem_id):
-    problem = get_object_or_404(Problem, id=problem_id)
-    solutions = problem.solutions.annotate(
-        upvotes_count=Count("vote", filter=Q(vote__type="up")),
-        downvotes_count=Count("vote", filter=Q(vote__type="down"))
-    ).order_by("-ai_generated", "answer_type", "-upvotes_count", "downvotes_count", "-created_at")
-    return render(request, "problem_detail.html", {"problem": problem, "solutions": solutions})
+    try:
+        context = get_problem_detail_context(problem_id)
+    except Problem.DoesNotExist as exc:
+        raise Http404("Problem not found") from exc
+    return render(request, "problem_detail.html", context)
+
+
+@login_required(login_url="login")
+def accept_solution(request, solution_id):
+    solution = get_object_or_404(Solution.objects.select_related("problem", "author"), id=solution_id)
+    if request.method != "POST":
+        return redirect("problem_detail", problem_id=solution.problem_id)
+    if solution.problem.user != request.user:
+        messages.error(request, "Only the problem owner can accept a human contribution.")
+        return redirect("problem_detail", problem_id=solution.problem_id)
+
+    solution.problem.accepted_solution = solution
+    solution.problem.save(update_fields=["accepted_solution"])
+    messages.success(request, "Contribution marked as accepted.")
+    return redirect("problem_detail", problem_id=solution.problem_id)
+
 
 @login_required(login_url="login")
 def edit_solution(request, solution_id):
     solution = get_object_or_404(Solution, id=solution_id)
-    if solution.ai_generated or solution.author != request.user:
+    if solution.author != request.user:
         return redirect("problem_detail", problem_id=solution.problem.id)
     if request.method == "POST":
-        content = request.POST.get("content")
+        content = request.POST.get("content", "").strip()
         if content:
             solution.content = content
-            solution.save()
+            solution.save(update_fields=["content"])
             return redirect("problem_detail", problem_id=solution.problem.id)
     return render(request, "edit_solution.html", {"solution": solution})
+
 
 @login_required(login_url="login")
 def delete_solution(request, solution_id):
     solution = get_object_or_404(Solution, id=solution_id)
-    if solution.ai_generated or solution.author != request.user:
+    if solution.author != request.user:
         return redirect("problem_detail", problem_id=solution.problem.id)
     if request.method == "POST":
         problem_id = solution.problem.id
@@ -240,16 +259,43 @@ def delete_solution(request, solution_id):
         return redirect("problem_detail", problem_id=problem_id)
     return render(request, "delete_solution.html", {"solution": solution})
 
+
 def home(request):
-    problems = Problem.objects.all().order_by("-created_at")
-    return render(request, "index.html", {"problems": problems})
+    return render(request, "index.html", {"problems": list_recent_problems()})
+
+
+@login_required(login_url="login")
+def profile(request):
+    user = (
+        CustomUser.objects
+        .prefetch_related("problem_set__accepted_solution", "solution_set")
+        .get(pk=request.user.pk)
+    )
+    problems = user.problem_set.all()[:5]
+    contributions = user.solution_set.all()[:5]
+    context = {
+        "profile_user": user,
+        "recent_problems": problems,
+        "recent_contributions": contributions,
+        "stats": {
+            "problems_created": user.problem_set.count(),
+            "human_contributions": user.solution_set.count(),
+            "accepted_answers": user.solution_set.filter(accepted_for_problems__isnull=False).distinct().count(),
+            "verified": user.is_verified,
+        },
+    }
+    return render(request, "profile.html", context)
+
 
 @login_required(login_url="login")
 def add_comment(request, solution_id):
+    solution = get_object_or_404(Solution, id=solution_id)
     if request.method == "POST":
-        solution = get_object_or_404(Solution, id=solution_id)
-        Comment.objects.create(solution=solution, content=request.POST.get("content"), author=request.user)
+        content = request.POST.get("content", "").strip()
+        if content:
+            Comment.objects.create(solution=solution, content=content, author=request.user)
     return redirect("problem_detail", problem_id=solution.problem.id)
+
 
 @login_required(login_url="login")
 def vote_solution(request, solution_id, vote_type):
@@ -262,113 +308,57 @@ def vote_solution(request, solution_id, vote_type):
         vote.type = vote_type
         vote.save()
         message = "Vote recorded"
-    return JsonResponse({
-        "message": message,
-        "upvotes": Vote.objects.filter(solution=solution, type="up").count(),
-        "downvotes": Vote.objects.filter(solution=solution, type="down").count()
-    })
-
-@login_required(login_url="login")
-def reports_dashboard(request):
-    total_problems = Problem.objects.count()
-    total_solutions = Solution.objects.count()
-    total_comments = Comment.objects.count()
-    total_votes = Vote.objects.count()
-    problems_per_topic = Problem.objects.values("topic").annotate(count=Count("id")).order_by("-count")
-    problems_daily = Problem.objects.annotate(date=TruncDate("created_at")).values("date").annotate(count=Count("id")).order_by("date")
-    top_active_users = CustomUser.objects.annotate(
-        human_solutions_posted=Count("solution", filter=Q(solution__ai_generated=False), distinct=True),
-        comments_posted=Count("comment", distinct=True)
-    ).annotate(activity_score=F("human_solutions_posted") + F("comments_posted")).order_by("-activity_score")[:10]
-    ai_solutions = Solution.objects.filter(ai_generated=True).count()
-    human_full_solutions = Solution.objects.filter(ai_generated=False).count()
-    ai_votes = Vote.objects.filter(solution__ai_generated=True).count()
-    human_votes_on_solutions = Vote.objects.filter(solution__ai_generated=False).count()
-    ai_avg_votes = ai_votes / ai_solutions if ai_solutions else 0
-    human_avg_votes = human_votes_on_solutions / human_full_solutions if human_full_solutions else 0
-    ai_type_breakdown = Solution.objects.filter(ai_generated=True).values("answer_type").annotate(count=Count("id")).order_by("-count")
-    human_type_breakdown = Solution.objects.filter(ai_generated=False).values("answer_type").annotate(count=Count("id")).order_by("-count")
-    top_ai_solutions = Solution.objects.filter(ai_generated=True).annotate(
-        upvotes=Count("vote", filter=Q(vote__type="up")),
-        downvotes=Count("vote", filter=Q(vote__type="down"))
-    ).annotate(score=F("upvotes") - F("downvotes")).order_by("-score")[:10]
-    top_human_solutions = Solution.objects.filter(ai_generated=False).annotate(
-        upvotes=Count("vote", filter=Q(vote__type="up")),
-        downvotes=Count("vote", filter=Q(vote__type="down"))
-    ).annotate(score=F("upvotes") - F("downvotes")).order_by("-score")[:10]
-    best_users = CustomUser.objects.annotate(
-        total_upvotes=Count("solution__vote", filter=Q(solution__vote__type="up", solution__ai_generated=False)),
-        total_solutions=Count("solution", filter=Q(solution__ai_generated=False), distinct=True)
-    ).order_by("-total_upvotes")[:10]
-    most_active_problems = Problem.objects.annotate(
-        solution_count=Count("solutions", filter=Q(solutions__ai_generated=False), distinct=True),
-        comment_count=Count("solutions__comments", distinct=True)
-    ).annotate(activity_score=F("solution_count") + F("comment_count")).order_by("-activity_score")[:10]
-    context = {
-        "engagement": {
-            "total_problems": total_problems,
-            "total_solutions": total_solutions,
-            "total_comments": total_comments,
-            "total_votes": total_votes,
-            "problems_per_topic": problems_per_topic,
-            "problems_daily": problems_daily,
-            "top_active_users": top_active_users,
-        },
-        "ai": {
-            "ai_solutions": ai_solutions,
-            "human_solutions": human_full_solutions,
-            "ai_avg_votes": ai_avg_votes,
-            "human_avg_votes": human_avg_votes,
-            "ai_type_breakdown": ai_type_breakdown,
-            "human_type_breakdown": human_type_breakdown,
-        },
-        "oversight": {
-            "top_ai_solutions": top_ai_solutions,
-            "top_human_solutions": top_human_solutions,
-            "best_users": best_users,
-            "most_active_problems": most_active_problems,
+    return JsonResponse(
+        {
+            "message": message,
+            "upvotes": Vote.objects.filter(solution=solution, type="up").count(),
+            "downvotes": Vote.objects.filter(solution=solution, type="down").count(),
         }
-    }
+    )
+
+
+@staff_member_required(login_url="login")
+def reports_dashboard(request):
+    if not request.user.has_perm("main.view_reports_dashboard"):
+        raise PermissionDenied("You do not have permission to view reports.")
+    context = build_reports_context()
     if request.GET.get("export") == "csv":
         response = HttpResponse(content_type="text/csv")
-        response['Content-Disposition'] = 'attachment; filename="reports.csv"'
+        response["Content-Disposition"] = 'attachment; filename="reports.csv"'
         writer = csv.writer(response)
         writer.writerow(["Metric", "Value"])
-        writer.writerow(["Total Problems", total_problems])
-        writer.writerow(["Total Solutions", total_solutions])
-        writer.writerow(["Total Comments", total_comments])
-        writer.writerow(["Total Votes", total_votes])
-        writer.writerow(["AI Solutions", ai_solutions])
-        writer.writerow(["Human Solutions", human_full_solutions])
-        writer.writerow(["AI Avg Votes", ai_avg_votes])
-        writer.writerow(["Human Avg Votes", human_avg_votes])
+        writer.writerow(["Total Problems", context["overview"]["total_problems"]])
+        writer.writerow(["Human Contributions", context["engagement"]["total_human_contributions"]])
+        writer.writerow(["Total Comments", context["engagement"]["total_comments"]])
+        writer.writerow(["Total Votes", context["engagement"]["total_votes"]])
+        writer.writerow(["AI Threads Started", context["ai"]["problems_with_ai"]])
+        writer.writerow(["Assistant Messages", context["ai"]["assistant_message_count"]])
+        writer.writerow(["Owner Follow-ups", context["ai"]["owner_message_count"]])
+        writer.writerow(["Human Avg Votes", context["ai"]["human_avg_votes"]])
         return response
     if request.GET.get("export") == "pdf":
         buffer = BytesIO()
-        p = canvas.Canvas(buffer)
+        pdf = canvas.Canvas(buffer)
         y = 800
-        p.setFont("Helvetica-Bold", 14)
-        p.drawString(50, y, "CodeClinic Reports")
+        pdf.setFont("Helvetica-Bold", 14)
+        pdf.drawString(50, y, "CodeClinic Reports")
         y -= 40
-        p.setFont("Helvetica", 12)
-        p.drawString(50, y, f"Total Problems: {total_problems}")
+        pdf.setFont("Helvetica", 12)
+        pdf.drawString(50, y, f"Total Problems: {context['overview']['total_problems']}")
         y -= 20
-        p.drawString(50, y, f"Total Solutions: {total_solutions}")
+        pdf.drawString(50, y, f"Human Contributions: {context['engagement']['total_human_contributions']}")
         y -= 20
-        p.drawString(50, y, f"Total Comments: {total_comments}")
+        pdf.drawString(50, y, f"Total Comments: {context['engagement']['total_comments']}")
         y -= 20
-        p.drawString(50, y, f"Total Votes: {total_votes}")
+        pdf.drawString(50, y, f"Total Votes: {context['engagement']['total_votes']}")
         y -= 20
-        p.drawString(50, y, f"AI Solutions: {ai_solutions}")
+        pdf.drawString(50, y, f"AI Threads Started: {context['ai']['problems_with_ai']}")
         y -= 20
-        p.drawString(50, y, f"Human Solutions: {human_full_solutions}")
+        pdf.drawString(50, y, f"Assistant Messages: {context['ai']['assistant_message_count']}")
         y -= 20
-        p.drawString(50, y, f"AI Avg Votes: {ai_avg_votes}")
-        y -= 20
-        p.drawString(50, y, f"Human Avg Votes: {human_avg_votes}")
-        y -= 20
-        p.showPage()
-        p.save()
+        pdf.drawString(50, y, f"Human Avg Votes: {context['ai']['human_avg_votes']}")
+        pdf.showPage()
+        pdf.save()
         buffer.seek(0)
-        return HttpResponse(buffer, content_type='application/pdf')
+        return HttpResponse(buffer, content_type="application/pdf")
     return render(request, "admin/reports_dashboard.html", context)

@@ -3,13 +3,15 @@
 {% block title %}Delete Solution{% endblock %}
 
 {% block content %}
-<div class="card form-card danger-zone">
-    <h2>Delete Solution</h2>
-    <p>This action cannot be undone.</p>
+<div class="mx-auto max-w-xl rounded-[2rem] border border-rose-500/20 bg-slate-900/80 p-8 shadow-2xl shadow-slate-950/40">
+    <h2 class="text-3xl font-semibold text-white">Delete Solution</h2>
+    <p class="mt-3 text-slate-300">This action cannot be undone.</p>
     <form method="POST">
         {% csrf_token %}
-        <button type="submit" class="btn-danger">Yes, Delete</button>
-        <a href="{% url 'problem_detail' solution.problem.id %}" class="btn-cancel">Cancel</a>
+        <div class="mt-6 flex flex-wrap gap-3">
+            <button type="submit" class="rounded-full bg-rose-500 px-5 py-3 font-semibold text-white hover:bg-rose-400">Yes, Delete</button>
+            <a href="{% url 'problem_detail' solution.problem.id %}" class="rounded-full border border-white/10 px-5 py-3 text-slate-200 hover:border-white/30">Cancel</a>
+        </div>
     </form>
 </div>
 {% endblock %}

@@ -1,112 +1,527 @@
 {% extends "admin/base_site.html" %}
 
-{% block content %}
-<h1 style="text-align:center; margin-bottom:2rem;">CodeClinic Reports Dashboard</h1>
-
-<!-- Export Buttons -->
-<div style="text-align:center; margin-bottom:2rem;">
-    <a href="{% url 'myadmin:reports_dashboard' %}?export=csv" class="button" 
-       style="margin-right:1rem; padding:0.5rem 1rem; background:#36A2EB; color:white; border-radius:5px;">
-        Export CSV
-    </a>
-    <a href="{% url 'myadmin:reports_dashboard' %}?export=pdf" class="button" 
-       style="padding:0.5rem 1rem; background:#FF6384; color:white; border-radius:5px;">
-        Export PDF
-    </a>
-</div>
-
-<div style="display:grid; grid-template-columns: repeat(auto-fit,minmax(250px,1fr)); gap:1rem;">
-    <div class="dashboard-card">
-        <h2>Engagement</h2>
-        <ul>
-            <li>Total problems: {{ engagement.total_problems }}</li>
-            <li>Total solutions: {{ engagement.total_solutions }}</li>
-            <li>Total comments: {{ engagement.total_comments }}</li>
-            <li>Total votes: {{ engagement.total_votes }}</li>
-        </ul>
-    </div>
-
-    <div class="dashboard-card" style="text-align:center;">
-        <h2>AI vs Human Solutions</h2>
-        <div style="width: 250px; height: 250px; margin: 0 auto;">
-            <canvas id="solutionChart"></canvas>
-        </div>
-        <ul style="margin-top:1rem;">
-            <li>Total AI solutions: {{ ai.ai_solutions }}</li>
-            <li>Total Human solutions: {{ ai.human_solutions }}</li>
-            <li>Avg votes per AI solution: {{ ai.ai_avg_votes|floatformat:2 }}</li>
-            <li>Avg votes per Human solution: {{ ai.human_avg_votes|floatformat:2 }}</li>
-        </ul>
-    </div>
-</div>
-
-<h2>Top Solutions</h2>
-<div style="display:flex; gap:1rem; flex-wrap:wrap;">
-    <div class="dashboard-card" style="flex:1; min-width:250px;">
-        <h4>Top AI Solutions</h4>
-        <ul>
-            {% for s in oversight.top_ai_solutions %}
-            <li>ID {{ s.id }} - Upvotes: {{ s.upvotes }} / Downvotes: {{ s.downvotes }} - Problem: "{{ s.problem.description|truncatechars:50 }}"</li>
-            {% empty %}
-            <li>No AI solutions yet.</li>
-            {% endfor %}
-        </ul>
-    </div>
-    <div class="dashboard-card" style="flex:1; min-width:250px;">
-        <h4>Top Human Solutions</h4>
-        <ul>
-            {% for s in oversight.top_human_solutions %}
-            <li>ID {{ s.id }} - Upvotes: {{ s.upvotes }} / Downvotes: {{ s.downvotes }} - Problem: "{{ s.problem.description|truncatechars:50 }}"</li>
-            {% empty %}
-            <li>No human solutions yet.</li>
-            {% endfor %}
-        </ul>
-    </div>
-</div>
-
-<h2>Best Users (by Upvotes)</h2>
-<div class="dashboard-card">
-    <ul>
-        {% for u in oversight.best_users %}
-        <li>{{ u.username }} - Upvotes: {{ u.total_upvotes }} - Solutions: {{ u.total_solutions }}</li>
-        {% empty %}
-        <li>No users with contributions yet.</li>
-        {% endfor %}
-    </ul>
-</div>
-
-<h2>Most Active Problems</h2>
-<div class="dashboard-card">
-    <ul>
-        {% for p in oversight.most_active_problems %}
-        <li>ID {{ p.id }} - Activity Score: {{ p.activity_score }} (Solutions: {{ p.solution_count }}, Comments: {{ p.comment_count }})</li>
-        {% empty %}
-        <li>No active problems yet.</li>
-        {% endfor %}
-    </ul>
-</div>
-
-<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-<script>
-const ctx = document.getElementById('solutionChart').getContext('2d');
-new Chart(ctx, {
-    type: 'pie',
-    data: {
-        labels: ['AI Solutions','Human Solutions'],
-        datasets: [{
-            data: [{{ ai.ai_solutions }},{{ ai.human_solutions }}],
-            backgroundColor: ['#36A2EB','#FF6384'],
-            borderWidth:1
-        }]
-    },
-    options:{
-        responsive:true,
-        maintainAspectRatio:false,
-        plugins:{
-            legend:{position:'bottom'},
-            title:{display:true,text:'AI vs Human Solutions'}
+{% block extrahead %}
+    {{ block.super }}
+    <style>
+        .reports-page {
+            color: #e2e8f0;
+            font-family: "Inter", sans-serif;
         }
-    }
-});
-</script>
+
+        .reports-hero {
+            display: flex;
+            justify-content: space-between;
+            gap: 24px;
+            align-items: flex-end;
+            padding: 32px;
+            border-radius: 28px;
+            border: 1px solid rgba(34, 211, 238, 0.18);
+            background:
+                radial-gradient(circle at top left, rgba(34, 211, 238, 0.22), transparent 30%),
+                radial-gradient(circle at bottom right, rgba(59, 130, 246, 0.18), transparent 24%),
+                linear-gradient(135deg, rgba(15, 23, 42, 0.96), rgba(8, 47, 73, 0.9));
+            box-shadow: 0 26px 70px rgba(2, 8, 23, 0.36);
+        }
+
+        .reports-brand {
+            display: flex;
+            align-items: center;
+            gap: 18px;
+        }
+
+        .reports-brand-badge {
+            width: 76px;
+            height: 76px;
+            border-radius: 24px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border: 1px solid rgba(34, 211, 238, 0.26);
+            background: linear-gradient(145deg, rgba(34, 211, 238, 0.28), rgba(56, 189, 248, 0.08));
+            box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08), 0 16px 36px rgba(8, 47, 73, 0.32);
+            font-family: "Space Grotesk", sans-serif;
+            font-size: 26px;
+            font-weight: 700;
+            color: #ffffff;
+            letter-spacing: -0.06em;
+        }
+
+        .reports-kicker {
+            margin: 0 0 8px;
+            color: #67e8f9;
+            font-size: 12px;
+            font-weight: 700;
+            letter-spacing: 0.28em;
+            text-transform: uppercase;
+        }
+
+        .reports-title {
+            margin: 0;
+            color: #ffffff;
+            font-size: 46px;
+            line-height: 1;
+            font-weight: 700;
+            letter-spacing: -0.04em;
+        }
+
+        .reports-subtitle {
+            margin: 14px 0 0;
+            max-width: 680px;
+            color: #cbd5e1;
+            font-size: 15px;
+            line-height: 1.8;
+        }
+
+        .reports-actions {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 12px;
+        }
+
+        .reports-action {
+            min-width: 156px;
+            padding: 14px 18px;
+            border-radius: 16px;
+            text-decoration: none;
+            display: inline-block;
+            transition: transform 180ms ease, box-shadow 180ms ease, opacity 180ms ease;
+        }
+
+        .reports-action:hover {
+            transform: translateY(-2px);
+            opacity: 0.98;
+        }
+
+        .reports-action-csv {
+            background: linear-gradient(135deg, #22d3ee, #0891b2);
+            color: #082f49 !important;
+            box-shadow: 0 16px 36px rgba(8, 145, 178, 0.28);
+        }
+
+        .reports-action-pdf {
+            background: linear-gradient(135deg, #fb923c, #f43f5e);
+            color: #fff7ed !important;
+            box-shadow: 0 16px 36px rgba(190, 24, 93, 0.28);
+        }
+
+        .reports-action strong {
+            display: block;
+            font-size: 14px;
+            font-weight: 700;
+        }
+
+        .reports-action span {
+            display: block;
+            margin-top: 4px;
+            font-size: 11px;
+            letter-spacing: 0.16em;
+            text-transform: uppercase;
+            opacity: 0.8;
+        }
+
+        .reports-grid {
+            display: grid;
+            gap: 24px;
+            margin-top: 24px;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+
+        .reports-card {
+            padding: 28px;
+            border-radius: 24px;
+            border: 1px solid rgba(148, 163, 184, 0.14);
+            background: linear-gradient(180deg, rgba(15, 23, 42, 0.96), rgba(15, 23, 42, 0.88));
+            box-shadow: 0 22px 56px rgba(2, 8, 23, 0.28);
+        }
+
+        .reports-card h2 {
+            margin: 8px 0 0;
+            color: #ffffff;
+            font-size: 28px;
+            line-height: 1.2;
+            font-weight: 600;
+        }
+
+        .reports-label {
+            color: #94a3b8;
+            font-size: 12px;
+            letter-spacing: 0.18em;
+            text-transform: uppercase;
+        }
+
+        .reports-mini-grid {
+            display: grid;
+            gap: 16px;
+            margin-top: 24px;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+
+        .reports-stat {
+            min-height: 154px;
+            padding: 18px;
+            border-radius: 18px;
+            border: 1px solid rgba(148, 163, 184, 0.12);
+            background: rgba(255, 255, 255, 0.04);
+        }
+
+        .reports-stat-cyan {
+            background: linear-gradient(180deg, rgba(34, 211, 238, 0.14), rgba(34, 211, 238, 0.04));
+            border-color: rgba(34, 211, 238, 0.16);
+        }
+
+        .reports-stat-emerald {
+            background: linear-gradient(180deg, rgba(52, 211, 153, 0.14), rgba(52, 211, 153, 0.04));
+            border-color: rgba(52, 211, 153, 0.16);
+        }
+
+        .reports-stat-title {
+            color: #94a3b8;
+            font-size: 12px;
+            letter-spacing: 0.14em;
+            text-transform: uppercase;
+        }
+
+        .reports-stat-value {
+            margin-top: 16px;
+            color: #ffffff;
+            font-size: 40px;
+            line-height: 1;
+            font-weight: 700;
+            letter-spacing: -0.05em;
+        }
+
+        .reports-stat-note {
+            margin-top: 10px;
+            color: #cbd5e1;
+            font-size: 14px;
+            line-height: 1.6;
+        }
+
+        .reports-metric-list {
+            display: grid;
+            gap: 12px;
+            margin-top: 24px;
+        }
+
+        .reports-metric {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 12px;
+            padding: 16px 18px;
+            border-radius: 16px;
+            background: rgba(255, 255, 255, 0.04);
+            border: 1px solid rgba(148, 163, 184, 0.1);
+            color: #e2e8f0;
+            font-size: 14px;
+        }
+
+        .reports-metric strong {
+            color: #ffffff;
+            font-size: 16px;
+        }
+
+        .reports-list {
+            display: grid;
+            gap: 12px;
+            margin-top: 24px;
+        }
+
+        .reports-list-item {
+            padding: 16px 18px;
+            border-radius: 16px;
+            background: rgba(255, 255, 255, 0.04);
+            border: 1px solid rgba(148, 163, 184, 0.1);
+        }
+
+        .reports-list-item strong {
+            color: #ffffff;
+            font-size: 15px;
+            line-height: 1.6;
+        }
+
+        .reports-list-item p {
+            margin: 8px 0 0;
+            color: #cbd5e1;
+            font-size: 14px;
+            line-height: 1.7;
+        }
+
+        .reports-topic-row {
+            margin-top: 18px;
+        }
+
+        .reports-topic-head {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 8px;
+            color: #e2e8f0;
+            font-size: 14px;
+        }
+
+        .reports-topic-bar {
+            height: 10px;
+            border-radius: 999px;
+            background: #172033;
+            overflow: hidden;
+        }
+
+        .reports-topic-bar span {
+            display: block;
+            height: 100%;
+            border-radius: 999px;
+            background: linear-gradient(90deg, #22d3ee, #38bdf8);
+        }
+
+        @media (max-width: 1100px) {
+            .reports-hero {
+                align-items: flex-start;
+                flex-direction: column;
+            }
+        }
+
+        @media (max-width: 900px) {
+            .reports-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        @media (max-width: 640px) {
+            .reports-title {
+                font-size: 36px;
+            }
+
+            .reports-brand {
+                align-items: flex-start;
+                flex-direction: column;
+            }
+
+            .reports-mini-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .reports-action {
+                width: 100%;
+            }
+        }
+    </style>
+{% endblock %}
+
+{% block content %}
+<div class="reports-page">
+    <section class="reports-hero">
+        <div>
+            <div class="reports-brand">
+                <div class="reports-brand-badge">CC</div>
+                <div>
+                    <p class="reports-kicker">Operational Analytics</p>
+                    <h1 class="reports-title">CodeClinic Reports</h1>
+                </div>
+            </div>
+        </div>
+        <div class="reports-actions">
+            <a href="{% url 'myadmin:reports_dashboard' %}?export=csv" class="reports-action reports-action-csv">
+                <strong>Export CSV</strong>
+                <span>Spreadsheet</span>
+            </a>
+            <a href="{% url 'myadmin:reports_dashboard' %}?export=pdf" class="reports-action reports-action-pdf">
+                <strong>Export PDF</strong>
+                <span>Presentation</span>
+            </a>
+        </div>
+    </section>
+
+    <div class="reports-grid">
+        <section class="reports-card">
+            <div class="reports-label">Overview</div>
+            <h2>Platform health</h2>
+            <div class="reports-mini-grid">
+                <div class="reports-stat">
+                    <div class="reports-stat-title">Problems</div>
+                    <div class="reports-stat-value">{{ overview.total_problems }}</div>
+                    <div class="reports-stat-note">All coding threads opened on CodeClinic.</div>
+                </div>
+                <div class="reports-stat reports-stat-cyan">
+                    <div class="reports-stat-title">Resolved</div>
+                    <div class="reports-stat-value">{{ overview.resolved_problems }}</div>
+                    <div class="reports-stat-note">{{ overview.resolution_rate|floatformat:2 }}% resolution rate.</div>
+                </div>
+                <div class="reports-stat">
+                    <div class="reports-stat-title">Community Reach</div>
+                    <div class="reports-stat-value">{{ overview.community_touched_problems }}</div>
+                    <div class="reports-stat-note">{{ overview.community_response_rate|floatformat:2 }}% of problems got human input.</div>
+                </div>
+                <div class="reports-stat">
+                    <div class="reports-stat-title">Thread Depth</div>
+                    <div class="reports-stat-value">{{ engagement.avg_messages_per_thread|floatformat:2 }}</div>
+                    <div class="reports-stat-note">{{ engagement.total_messages }} total AI-thread messages.</div>
+                </div>
+            </div>
+        </section>
+
+        <section class="reports-card">
+            <div class="reports-label">Support Mix</div>
+            <h2>AI and community balance</h2>
+            <div class="reports-mini-grid">
+                <div class="reports-stat reports-stat-emerald">
+                    <div class="reports-stat-title">AI Conversations</div>
+                    <div class="reports-stat-value">{{ ai.problems_with_ai }}</div>
+                    <div class="reports-stat-note">{{ ai.assistant_message_count }} assistant messages.</div>
+                </div>
+                <div class="reports-stat reports-stat-cyan">
+                    <div class="reports-stat-title">Human Contributions</div>
+                    <div class="reports-stat-value">{{ engagement.total_human_contributions }}</div>
+                    <div class="reports-stat-note">{{ ai.owner_message_count }} owner follow-up prompts.</div>
+                </div>
+            </div>
+            <div class="reports-metric-list">
+                <div class="reports-metric">
+                    <span>Threads using AI</span>
+                    <strong>{{ ai.ai_share|floatformat:2 }}%</strong>
+                </div>
+                <div class="reports-metric">
+                    <span>Threads with human collaboration</span>
+                    <strong>{{ ai.community_share|floatformat:2 }}%</strong>
+                </div>
+                <div class="reports-metric">
+                    <span>Average votes per human contribution</span>
+                    <strong>{{ ai.human_avg_votes|floatformat:2 }}</strong>
+                </div>
+            </div>
+        </section>
+
+        <section class="reports-card">
+            <div class="reports-label">Topic Distribution</div>
+            <h2>What users ask about</h2>
+            {% for topic in engagement.problems_per_topic %}
+                <div class="reports-topic-row">
+                    <div class="reports-topic-head">
+                        <span>{{ topic.topic|default:"Uncategorized" }}</span>
+                        <span>{{ topic.count }}</span>
+                    </div>
+                    <div class="reports-topic-bar">
+                        <span style="width:{% widthratio topic.count overview.total_problems 100 %}%"></span>
+                    </div>
+                </div>
+            {% empty %}
+                <div class="reports-stat-note" style="margin-top:20px;">No topic data yet.</div>
+            {% endfor %}
+        </section>
+
+        <section class="reports-card">
+            <div class="reports-label">Contribution Quality</div>
+            <h2>Human contribution types</h2>
+            <div class="reports-mini-grid">
+                {% for item in ai.contribution_type_breakdown %}
+                    <div class="reports-stat">
+                        <div class="reports-stat-title">{{ item.answer_type|default:"Direct" }}</div>
+                        <div class="reports-stat-value">{{ item.count }}</div>
+                        <div class="reports-stat-note">Contributions in this category.</div>
+                    </div>
+                {% empty %}
+                    <div class="reports-stat-note" style="margin-top:20px;">No contribution data yet.</div>
+                {% endfor %}
+            </div>
+        </section>
+
+        <section class="reports-card">
+            <div class="reports-label">AI Usage</div>
+            <h2>Most consulted AI threads</h2>
+            <div class="reports-list">
+                {% for problem in oversight.most_consulted_ai_threads %}
+                    <div class="reports-list-item">
+                        <strong>{{ problem.description|truncatechars:88 }}</strong>
+                        <p>Assistant turns: {{ problem.assistant_turns }} • Owner prompts: {{ problem.owner_turns }} • Combined activity: {{ problem.total_ai_activity }}</p>
+                    </div>
+                {% empty %}
+                    <div class="reports-stat-note">No AI-assisted threads yet.</div>
+                {% endfor %}
+            </div>
+        </section>
+
+        <section class="reports-card">
+            <div class="reports-label">Community Quality</div>
+            <h2>Top human contributions</h2>
+            <div class="reports-list">
+                {% for s in oversight.top_human_contributions %}
+                    <div class="reports-list-item">
+                        <strong>{{ s.problem.description|truncatechars:88 }}</strong>
+                        <p>Score: {{ s.score }} • Author: {{ s.author.username|default:"Unknown" }}{% if s.accepted_rank %} • Accepted{% endif %}</p>
+                    </div>
+                {% empty %}
+                    <div class="reports-stat-note">No human contributions yet.</div>
+                {% endfor %}
+            </div>
+        </section>
+
+        <section class="reports-card">
+            <div class="reports-label">Contributors</div>
+            <h2>Best users</h2>
+            <div class="reports-list">
+                {% for u in oversight.best_users %}
+                    <div class="reports-list-item">
+                        <strong>{{ u.username }}</strong>
+                        <p>Accepted: {{ u.accepted_answers }} • Upvotes: {{ u.total_upvotes }} • Human contributions: {{ u.total_contributions }}</p>
+                    </div>
+                {% empty %}
+                    <div class="reports-stat-note">No user contribution data yet.</div>
+                {% endfor %}
+            </div>
+        </section>
+
+        <section class="reports-card">
+            <div class="reports-label">Problem Heatmap</div>
+            <h2>Most active problems</h2>
+            <div class="reports-list">
+                {% for p in oversight.most_active_problems %}
+                    <div class="reports-list-item">
+                        <strong>{{ p.description|truncatechars:88 }}</strong>
+                        <p>Activity: {{ p.activity_score }} • Contributions: {{ p.contribution_count }} • Comments: {{ p.comment_count }} • AI turns: {{ p.ai_turn_count }}</p>
+                    </div>
+                {% empty %}
+                    <div class="reports-stat-note">No active problems yet.</div>
+                {% endfor %}
+            </div>
+        </section>
+
+        <section class="reports-card">
+            <div class="reports-label">Thread Flow</div>
+            <h2>Busiest threads</h2>
+            <div class="reports-list">
+                {% for thread in oversight.busiest_threads %}
+                    <div class="reports-list-item">
+                        <strong>{{ thread.problem.description|truncatechars:88 }}</strong>
+                        <p>Messages: {{ thread.total_messages }}{% if thread.last_message_at %} • Last activity: {{ thread.last_message_at|date:"M d, Y H:i" }}{% endif %}</p>
+                    </div>
+                {% empty %}
+                    <div class="reports-stat-note">No thread activity yet.</div>
+                {% endfor %}
+            </div>
+        </section>
+
+        <section class="reports-card">
+            <div class="reports-label">Snapshot</div>
+            <h2>Quick analytics board</h2>
+            <div class="reports-mini-grid">
+                <div class="reports-stat">
+                    <div class="reports-stat-title">AI Threads</div>
+                    <div class="reports-stat-value">{{ overview.problems_with_ai }}</div>
+                </div>
+                <div class="reports-stat">
+                    <div class="reports-stat-title">Comments</div>
+                    <div class="reports-stat-value">{{ engagement.total_comments }}</div>
+                </div>
+                <div class="reports-stat">
+                    <div class="reports-stat-title">Votes</div>
+                    <div class="reports-stat-value">{{ engagement.total_votes }}</div>
+                </div>
+                <div class="reports-stat">
+                    <div class="reports-stat-title">Messages</div>
+                    <div class="reports-stat-value">{{ engagement.total_messages }}</div>
+                </div>
+            </div>
+        </section>
+    </div>
+</div>
 {% endblock %}

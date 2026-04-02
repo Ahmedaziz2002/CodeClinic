@@ -1,0 +1,8 @@
+Hi {{ user.username }},
+
+Your {{ app_name }} account has been created successfully.
+
+Use your email and password to log in:
+{{ login_link }}
+
+No extra verification step is required.

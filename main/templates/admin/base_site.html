@@ -1,26 +1,36 @@
 {% extends "admin/base.html" %}
 {% load static %}
 
+{% block extrahead %}
+    {{ block.super }}
+    <script src="https://cdn.tailwindcss.com"></script>
+{% endblock %}
+
 {% block extrastyle %}
+    {{ block.super }}
     <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600&display=swap" rel="stylesheet">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="{% static 'css/admin_custom.css' %}">
 {% endblock %}
 
 {% block branding %}
-
-<div style="display:flex; align-items:center; gap:1rem; padding:1rem;">
-    <img src="{% static 'images/codeclinic_logo.png' %}" alt="CodeClinic Logo" height="40">
-    <h1 id="site-name" style="margin:0; font-family: 'Inter', sans-serif; font-weight: 600; color:#2C3E50;">
-        CodeClinic Admin
-    </h1>
+<div class="cc-admin-brand">
+    <a href="{% url 'myadmin:index' %}" class="cc-admin-brandmark">
+        <span class="cc-admin-brandicon">C</span>
+        <span class="cc-admin-brandtext">
+            <strong>CodeClinic</strong>
+            <small>Admin Intelligence</small>
+        </span>
+    </a>
 </div>
 {% endblock %}
 
 {% block nav-global %}
-<ul style="display:flex; gap:1rem; list-style:none; margin:0; padding:0;">
-    <li><a href="{% url 'admin:index' %}">Dashboard</a></li>
-    <li><a href="{% url 'myadmin:reports_dashboard' %}">View Reports</a></li>
-    <li><a href="{% url 'admin:logout' %}">Log Out</a></li>
-</ul>
+<nav class="cc-admin-nav">
+    <a href="{% url 'myadmin:index' %}">Dashboard</a>
+    <a href="{% url 'myadmin:reports_dashboard' %}">Reports</a>
+    <a href="{% url 'home' %}">Open App</a>
+    <a href="{% url 'myadmin:logout' %}">Log Out</a>
+</nav>
 {% endblock %}

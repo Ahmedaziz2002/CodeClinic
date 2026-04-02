@@ -1,0 +1,23 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Account created successfully</title>
+</head>
+<body style="margin:0;padding:0;background:#0f172a;font-family:Inter,Arial,sans-serif;color:#e2e8f0;">
+    <div style="max-width:640px;margin:0 auto;padding:32px 20px;">
+        <div style="background:#111827;border:1px solid #1f2937;border-radius:24px;padding:32px;">
+            <p style="margin:0 0 12px 0;font-size:12px;letter-spacing:0.2em;text-transform:uppercase;color:#22d3ee;">CodeClinic</p>
+            <h1 style="margin:0 0 16px 0;font-size:28px;line-height:1.2;color:#f8fafc;">Account created successfully</h1>
+            <p style="margin:0 0 16px 0;font-size:16px;line-height:1.7;color:#cbd5e1;">Hi {{ user.username }}, your {{ app_name }} account is active now. Use your email and password to sign in right away.</p>
+            <p style="margin:24px 0;">
+                <a href="{{ login_link }}" style="display:inline-block;background:#22d3ee;color:#082f49;text-decoration:none;font-weight:700;padding:14px 22px;border-radius:999px;">Go to Login</a>
+            </p>
+            <p style="margin:0 0 8px 0;font-size:14px;line-height:1.7;color:#94a3b8;">If the button does not work, open this link:</p>
+            <p style="margin:0 0 20px 0;font-size:14px;line-height:1.7;word-break:break-all;color:#67e8f9;">{{ login_link }}</p>
+            <p style="margin:0;font-size:14px;line-height:1.7;color:#94a3b8;">No extra verification step is required.</p>
+        </div>
+    </div>
+</body>
+</html>
