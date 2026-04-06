@@ -11,11 +11,12 @@ from django.contrib.admin.views.decorators import staff_member_required
 from django.contrib.auth import get_user_model
 from django.http import Http404, HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
+from django.conf import settings
 from django.utils.encoding import force_str
 from django.utils.http import urlsafe_base64_decode
 from reportlab.pdfgen import canvas
 
-from .models import Comment, CustomUser, Problem, Solution, Vote
+from .models import Comment, CustomUser, EmailLog, EmailVerification, Problem, Solution, Vote
 from .services import (
     build_reports_context,
     continue_problem_thread,
@@ -56,16 +57,42 @@ def signup(request):
             return redirect("signup")
 
         if email_sent:
-            messages.success(request, "Account created successfully. You can now log in using your email and password.")
+            messages.success(request, "Account created successfully. Please verify your email to activate your account.")
         else:
-            messages.warning(request, "Account created successfully. You can log in now using your email and password, but the email message could not be sent.")
+            detail = ""
+            if settings.DEBUG:
+                last_log = (
+                    EmailLog.objects
+                    .filter(user=user, email_type="verification", success=False)
+                    .only("error_message")
+                    .first()
+                )
+                if last_log and last_log.error_message:
+                    detail = f" SMTP error: {last_log.error_message}"
+            messages.warning(
+                request,
+                "Account created successfully, but the verification email could not be sent. "
+                "Please try resending the verification email."
+                + detail,
+            )
         return redirect("login")
 
     return render(request, "signup.html")
 
 
 def verify_email(request, token):
-    messages.info(request, "Your account is already active. You can log in directly with your email and password.")
+    try:
+        verification = EmailVerification.objects.select_related("user").get(token=token)
+    except EmailVerification.DoesNotExist:
+        messages.error(request, "This verification link is invalid or has expired.")
+        return redirect("login")
+
+    user = verification.user
+    user.is_active = True
+    user.is_verified = True
+    user.save(update_fields=["is_active", "is_verified"])
+    verification.delete()
+    messages.success(request, "Email verified successfully. You can now log in.")
     return redirect("login")
 
 
@@ -74,17 +101,12 @@ def user_login(request):
         email = request.POST.get("email", "").strip().lower()
         password = request.POST.get("password")
         user = authenticate(request, email=email, password=password)
-        if user is None and email and password:
-            candidate = CustomUser.objects.filter(email__iexact=email).first()
-            if candidate and candidate.check_password(password):
-                if not candidate.is_active or not candidate.is_verified:
-                    candidate.is_active = True
-                    candidate.is_verified = True
-                    candidate.save(update_fields=["is_active", "is_verified"])
-                user = candidate
         if user:
             login(request, user, backend="main.authentication.EmailBackend")
             return redirect("home")
+        if CustomUser.objects.filter(email__iexact=email, is_verified=False).exists():
+            messages.error(request, "Your email is not verified yet. Please verify your email to log in.")
+            return redirect("login")
         messages.error(request, "Invalid credentials.")
         return redirect("login")
     return render(request, "login.html")
@@ -94,15 +116,38 @@ def resend_verification(request):
     if request.method == "POST":
         email = request.POST.get("email", "").strip()
         user = CustomUser.objects.filter(email__iexact=email).first()
+        if user and user.is_verified:
+            messages.info(request, "That account is already verified. You can log in.")
+            return redirect("login")
         if user:
             try:
                 send_verification_email(user=user)
+                messages.success(
+                    request,
+                    "If that account exists, a verification email has been sent.",
+                )
             except Exception:
                 logger.exception("Resend verification email failed")
-        messages.success(
-            request,
-            "If that account exists, a sign-in reminder email has been sent.",
-        )
+                detail = ""
+                if settings.DEBUG:
+                    last_log = (
+                        EmailLog.objects
+                        .filter(user=user, email_type="verification", success=False)
+                        .only("error_message")
+                        .first()
+                    )
+                    if last_log and last_log.error_message:
+                        detail = f" SMTP error: {last_log.error_message}"
+                messages.error(
+                    request,
+                    "We could not send a verification email right now. Please check your email settings."
+                    + detail,
+                )
+        else:
+            messages.success(
+                request,
+                "If that account exists, a verification email has been sent.",
+            )
         return redirect("login")
     return render(request, "resend_verification.html")
 
@@ -271,6 +316,22 @@ def profile(request):
         .prefetch_related("problem_set__accepted_solution", "solution_set")
         .get(pk=request.user.pk)
     )
+    if request.method == "POST":
+        new_username = request.POST.get("username", "").strip()
+        if not new_username:
+            messages.error(request, "Username cannot be empty.")
+            return redirect("profile")
+        if new_username != user.username:
+            if CustomUser.objects.filter(username__iexact=new_username).exclude(pk=user.pk).exists():
+                messages.error(request, "That username is already taken.")
+                return redirect("profile")
+            username_field = CustomUser._meta.get_field("username")
+            for validator in username_field.validators:
+                validator(new_username)
+            user.username = new_username
+            user.save(update_fields=["username"])
+            messages.success(request, "Username updated successfully.")
+        return redirect("profile")
     problems = user.problem_set.all()[:5]
     contributions = user.solution_set.all()[:5]
     context = {

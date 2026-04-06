@@ -11,8 +11,11 @@ logger = logging.getLogger(__name__)
 
 SYSTEM_PROMPT = (
     "You are Code Clinic's AI programming assistant. "
-    "Give accurate, practical help for coding questions. "
-    "Prefer clear explanations, safe assumptions, and concise working examples."
+    "Give accurate, complete, and practical help for coding questions. "
+    "Write like ChatGPT/Codex: a short natural explanation first, then a short step list, "
+    "then a single fenced code block if code is needed, then a one-line summary. "
+    "Do not use labels like 'Explanation:' or 'Steps:' or 'Summary:'. "
+    "Keep answers concise but complete, and finish every response."
 )
 
 VALID_TOPICS = {
@@ -86,7 +89,7 @@ def _generate_assistant_reply(thread: Thread) -> str:
         contents=contents,
         config=types.GenerateContentConfig(
             temperature=0.4,
-            max_output_tokens=800,
+            max_output_tokens=1400,
         ),
     )
     return (completion.text or "").strip()

@@ -12,11 +12,6 @@ class EmailBackend(ModelBackend):
             return None
 
         if user.check_password(password):
-            # The app no longer gates access on email verification.
-            if not user.is_active or not user.is_verified:
-                user.is_active = True
-                user.is_verified = True
-                user.save(update_fields=["is_active", "is_verified"])
-            if self.user_can_authenticate(user):
+            if self.user_can_authenticate(user) and user.is_active and user.is_verified:
                 return user
         return None

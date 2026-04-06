@@ -5,9 +5,9 @@ from django.core import mail
 from django.test import Client, TestCase, override_settings
 from django.urls import reverse
 
-from main.models import Message, Problem, Solution, Thread
+from main.models import EmailVerification, Message, Problem, Solution, Thread
 from main.services.ai import continue_problem_thread, create_problem_with_ai_response
-from main.services.users import create_account, send_password_reset_email
+from main.services.users import create_account, send_password_reset_email, send_verification_email
 
 
 @override_settings(CHANNEL_LAYERS={"default": {"BACKEND": "channels.layers.InMemoryChannelLayer"}})
@@ -18,6 +18,7 @@ class AIConversationServiceTests(TestCase):
             username="owner",
             password="password123",
             is_verified=True,
+            is_active=True,
         )
 
     @patch("main.services.ai._generate_assistant_reply", return_value="Use a dictionary to track seen values.")
@@ -58,12 +59,14 @@ class HumanContributionViewTests(TestCase):
             username="owner2",
             password="password123",
             is_verified=True,
+            is_active=True,
         )
         self.helper = user_model.objects.create_user(
             email="helper@example.com",
             username="helper",
             password="password123",
             is_verified=True,
+            is_active=True,
         )
         self.problem = Problem.objects.create(user=self.owner, description="Need help with loops", topic="Uncategorized")
         self.client = Client()
@@ -87,45 +90,48 @@ class HumanContributionViewTests(TestCase):
 
 class UserOnboardingTests(TestCase):
     @override_settings(EMAIL_BACKEND="django.core.mail.backends.locmem.EmailBackend")
-    def test_create_account_creates_immediately_active_user_and_sends_email(self):
+    def test_create_account_creates_inactive_user_and_sends_verification_email(self):
         user, email_sent = create_account(username="newuser", email="new@example.com", password="password123")
 
-        self.assertTrue(user.is_active)
-        self.assertTrue(user.is_verified)
+        self.assertFalse(user.is_active)
+        self.assertFalse(user.is_verified)
         self.assertTrue(email_sent)
+        self.assertTrue(EmailVerification.objects.filter(user=user).exists())
         self.assertEqual(len(mail.outbox), 1)
-        self.assertIn("login", mail.outbox[0].body.lower())
-        self.assertIn("no extra verification step is required", mail.outbox[0].body.lower())
+        self.assertIn("verify-email", mail.outbox[0].body.lower())
 
-    @patch("main.services.users.send_verification_email", side_effect=Exception("smtp down"))
-    def test_create_account_still_succeeds_when_confirmation_email_fails(self, mocked_send):
-        user, email_sent = create_account(username="mailfail", email="mailfail@example.com", password="password123")
-
-        self.assertTrue(user.is_active)
-        self.assertTrue(user.is_verified)
-        self.assertFalse(email_sent)
-        mocked_send.assert_called_once()
-
-    def test_signup_created_user_can_log_in_immediately(self):
-        self.client.post(
-            reverse("signup"),
-            {
-                "username": "freshuser",
-                "email": "fresh@example.com",
-                "password": "password123",
-                "confirm_password": "password123",
-            },
+    def test_login_blocked_when_email_not_verified(self):
+        user_model = get_user_model()
+        user_model.objects.create_user(
+            email="pending@example.com",
+            username="pending",
+            password="password123",
+            is_active=False,
+            is_verified=False,
         )
-
         response = self.client.post(
             reverse("login"),
-            {
-                "email": "fresh@example.com",
-                "password": "password123",
-            },
+            {"email": "pending@example.com", "password": "password123"},
+            follow=True,
         )
+        self.assertContains(response, "not verified", status_code=200)
 
-        self.assertRedirects(response, reverse("home"))
+    def test_verify_email_activates_account(self):
+        user_model = get_user_model()
+        user = user_model.objects.create_user(
+            email="verifyme@example.com",
+            username="verifyme",
+            password="password123",
+            is_active=False,
+            is_verified=False,
+        )
+        verification = EmailVerification.objects.create(user=user)
+        response = self.client.get(reverse("verify_email", args=[verification.token]))
+        self.assertEqual(response.status_code, 302)
+        user.refresh_from_db()
+        self.assertTrue(user.is_active)
+        self.assertTrue(user.is_verified)
+        self.assertFalse(EmailVerification.objects.filter(user=user).exists())
 
     @override_settings(EMAIL_BACKEND="django.core.mail.backends.locmem.EmailBackend")
     def test_forgot_password_sends_reset_email(self):
@@ -143,7 +149,6 @@ class UserOnboardingTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(len(mail.outbox), 1)
         self.assertIn("reset-password", mail.outbox[0].body)
-        self.assertIn("http://127.0.0.1:8000", mail.outbox[0].body)
 
     @override_settings(EMAIL_BACKEND="django.core.mail.backends.locmem.EmailBackend")
     def test_password_reset_email_helper_uses_shared_base_url(self):
@@ -163,20 +168,25 @@ class UserOnboardingTests(TestCase):
         self.assertTrue(reset_link.startswith("http://127.0.0.1:8000/reset-password/"))
 
     @override_settings(EMAIL_BACKEND="django.core.mail.backends.locmem.EmailBackend")
-    def test_resend_sign_in_email_sends_message_without_verification_gate(self):
+    def test_resend_verification_sends_new_link_for_unverified_user(self):
         user_model = get_user_model()
-        user_model.objects.create_user(
-            email="verifyme@example.com",
-            username="verifyme",
+        user = user_model.objects.create_user(
+            email="verifyagain@example.com",
+            username="verifyagain",
             password="password123",
-            is_active=True,
-            is_verified=True,
+            is_active=False,
+            is_verified=False,
         )
+        send_verification_email(user=user)
+        first_token = EmailVerification.objects.get(user=user).token
         mail.outbox.clear()
 
-        response = self.client.post(reverse("resend_verification"), {"email": "verifyme@example.com"})
+        response = self.client.post(reverse("resend_verification"), {"email": "verifyagain@example.com"})
 
         self.assertEqual(response.status_code, 302)
         self.assertEqual(response.url, reverse("login"))
         self.assertEqual(len(mail.outbox), 1)
-        self.assertIn("login", mail.outbox[0].body.lower())
+        user.refresh_from_db()
+        self.assertFalse(user.is_active)
+        self.assertFalse(user.is_verified)
+        self.assertNotEqual(EmailVerification.objects.get(user=user).token, first_token)

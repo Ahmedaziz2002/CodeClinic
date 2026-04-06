@@ -37,13 +37,12 @@
         <p class="mt-5 max-w-4xl text-base leading-7 text-slate-300">{{ problem.description }}</p>
     </div>
 
-    <div class="grid gap-4 lg:grid-cols-[1fr_auto]">
+    <div class="grid gap-4">
         <div class="rounded-[2rem] border border-white/10 bg-slate-900/70 p-5">
             <div class="flex items-center justify-between">
                 <h3 class="text-lg font-semibold text-white">Active in This Thread</h3>
                 <span class="text-sm text-slate-400"><span data-active-user-count>{{ active_users|length }}</span> online</span>
             </div>
-            <p class="mt-2 text-sm text-slate-400">Click a name to insert an `@mention` into your message.</p>
             <div class="mt-4 flex flex-wrap gap-2" data-active-users-list>
                 {% for username in active_users %}
                     <button type="button" class="rounded-full border border-cyan-400/30 px-3 py-2 text-sm text-cyan-300 hover:bg-cyan-400/10" data-mention-username="{{ username }}">@{{ username }}</button>
@@ -51,10 +50,6 @@
                     <p class="text-sm text-slate-500">No one else is active in this thread yet.</p>
                 {% endfor %}
             </div>
-        </div>
-        <div class="rounded-[2rem] border border-white/10 bg-slate-900/70 p-5 text-sm text-slate-300">
-            <h3 class="text-lg font-semibold text-white">Human Collaboration</h3>
-            <p class="mt-2">Human answers stream live into the page over WebSockets. Presence updates now show who is currently viewing the thread, and clicking a user inserts an `@username` mention into your draft.</p>
         </div>
     </div>
 
@@ -76,7 +71,9 @@
                 {% for message in thread_messages %}
                     <div class="rounded-3xl border {% if message.role == 'assistant' %}border-emerald-500/20 bg-emerald-500/10{% else %}border-white/10 bg-slate-950/70{% endif %} p-4">
                         <span class="text-xs font-semibold uppercase tracking-[0.2em] {% if message.role == 'assistant' %}text-emerald-300{% else %}text-slate-400{% endif %}">{{ message.get_role_display }}</span>
-                        <pre class="mt-3 whitespace-pre-wrap break-words font-sans text-sm leading-6 text-slate-200">{{ message.content }}</pre>
+                        <div class="mt-3 rounded-2xl bg-slate-950/60 p-4">
+                            <div class="max-h-72 space-y-3 overflow-y-auto pr-2 text-sm leading-6 text-slate-200" data-message-content data-raw="{{ message.content|escapejs }}"></div>
+                        </div>
                     </div>
                 {% empty %}
                     <p class="rounded-3xl border border-dashed border-white/15 px-6 py-8 text-center text-slate-500">No AI conversation yet.</p>

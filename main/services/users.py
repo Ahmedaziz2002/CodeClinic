@@ -1,3 +1,6 @@
+import logging
+import uuid
+
 from django.conf import settings
 from django.contrib.auth.tokens import default_token_generator
 from django.core.mail import EmailMultiAlternatives
@@ -5,7 +8,9 @@ from django.template.loader import render_to_string
 from django.utils.encoding import force_bytes
 from django.utils.http import urlsafe_base64_encode
 
-from main.models import CustomUser, EmailLog
+from main.models import CustomUser, EmailLog, EmailVerification
+
+logger = logging.getLogger(__name__)
 
 
 def build_app_url(path: str) -> str:
@@ -44,12 +49,18 @@ def _send_auth_email(
     except Exception as exc:
         log.error_message = str(exc)
         log.save(update_fields=["error_message"])
+        logger.exception("Email delivery failed for %s", recipient)
         raise
 
 
 def send_verification_email(*, user: CustomUser):
+    verification, created = EmailVerification.objects.get_or_create(user=user)
+    if not created:
+        verification.token = uuid.uuid4()
+        verification.save(update_fields=["token"])
+    verification_link = build_app_url(f"verify-email/{verification.token}/")
     _send_auth_email(
-        subject="CodeClinic account created successfully",
+        subject="Verify your CodeClinic account",
         recipient=user.email,
         text_template="emails/verification_email.txt",
         html_template="emails/verification_email.html",
@@ -57,11 +68,11 @@ def send_verification_email(*, user: CustomUser):
         user=user,
         context={
             "user": user,
-            "login_link": build_app_url("login/"),
+            "verification_link": verification_link,
             "app_name": "CodeClinic",
         },
     )
-    return build_app_url("login/")
+    return verification_link
 
 
 def send_password_reset_email(*, user: CustomUser):
@@ -89,8 +100,8 @@ def create_account(*, username: str, email: str, password: str):
         username=username,
         email=email.strip().lower(),
         password=password,
-        is_active=True,
-        is_verified=True,
+        is_active=False,
+        is_verified=False,
     )
     email_sent = True
     try:

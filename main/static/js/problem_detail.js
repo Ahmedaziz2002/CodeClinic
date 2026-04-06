@@ -16,6 +16,112 @@
     const activeUserCount = root.querySelector("[data-active-user-count]");
     const mentionTargets = () => root.querySelectorAll("[data-mention-target]");
 
+    const decodeUnicodeEscapes = (value) =>
+        value.replace(/\\u([0-9a-fA-F]{4})/g, (_, code) => String.fromCharCode(parseInt(code, 16)));
+
+    const decodeRaw = (value) =>
+        decodeUnicodeEscapes(value)
+            .replace(/\\n/g, "\n")
+            .replace(/\\r/g, "\r")
+            .replace(/\\t/g, "\t")
+            .replace(/\\"/g, '"')
+            .replace(/\\'/g, "'");
+
+    const copyToClipboard = async (text, button) => {
+        if (!text) {
+            return;
+        }
+        try {
+            await navigator.clipboard.writeText(decodeRaw(text));
+            if (button) {
+                const original = button.textContent;
+                button.textContent = "Copied";
+                button.disabled = true;
+                setTimeout(() => {
+                    button.textContent = original;
+                    button.disabled = false;
+                }, 1400);
+            }
+        } catch (error) {
+            console.error("Copy failed", error);
+        }
+    };
+
+    const bindCopyButtons = (scope) => {
+        scope.querySelectorAll("[data-copy-raw]").forEach((button) => {
+            if (button.dataset.bound === "true") {
+                return;
+            }
+            button.dataset.bound = "true";
+            button.addEventListener("click", () => copyToClipboard(button.dataset.copyRaw, button));
+        });
+    };
+
+    const renderMessageBodies = (scope) => {
+        scope.querySelectorAll("[data-message-content]").forEach((container) => {
+            if (container.dataset.rendered === "true") {
+                return;
+            }
+            container.dataset.rendered = "true";
+            const raw = decodeRaw(container.dataset.raw || "");
+            const parts = raw.split(/```/);
+            const fragment = document.createDocumentFragment();
+
+            parts.forEach((part, index) => {
+                if (!part) {
+                    return;
+                }
+                if (index % 2 === 1) {
+                    let code = part;
+                    let lang = "";
+                    const newlineIndex = part.indexOf("\n");
+                    if (newlineIndex !== -1) {
+                        const maybeLang = part.slice(0, newlineIndex).trim();
+                        if (maybeLang && maybeLang.length < 20 && !maybeLang.includes(" ")) {
+                            lang = maybeLang;
+                            code = part.slice(newlineIndex + 1);
+                        }
+                    }
+                    const card = document.createElement("div");
+                    card.className = "rounded-2xl border border-cyan-400/30 bg-slate-950/80 p-3 shadow-lg shadow-cyan-500/10";
+                    const header = document.createElement("div");
+                    header.className = "flex items-center justify-between";
+                    const label = document.createElement("span");
+                    label.className = "text-[0.65rem] font-semibold uppercase tracking-[0.2em] text-cyan-200";
+                    label.textContent = lang ? `Code (${lang})` : "Code";
+                    const copyButton = document.createElement("button");
+                    copyButton.type = "button";
+                    copyButton.className =
+                        "cc-copy-button rounded-full border border-cyan-300/30 px-3 py-1 text-[0.65rem] font-semibold uppercase tracking-[0.15em] text-cyan-100 hover:border-cyan-300/60";
+                    copyButton.dataset.copyRaw = code.trim();
+                    copyButton.textContent = "Copy";
+                    header.append(label, copyButton);
+                    const pre = document.createElement("pre");
+                    pre.className = "mt-3 max-h-64 overflow-auto rounded-xl bg-slate-950/90 p-3 text-xs text-cyan-100";
+                    pre.textContent = code.trim();
+                    card.append(header, pre);
+                    fragment.append(card);
+                } else {
+                    const block = document.createElement("p");
+                    block.className = "whitespace-pre-wrap break-words text-sm leading-6 text-slate-200";
+                    block.textContent = part.trim();
+                    fragment.append(block);
+                }
+            });
+
+            if (!fragment.childNodes.length) {
+                const fallback = document.createElement("p");
+                fallback.className = "whitespace-pre-wrap break-words text-sm leading-6 text-slate-200";
+                fallback.textContent = raw.trim();
+                fragment.append(fallback);
+            }
+
+            container.innerHTML = "";
+            container.append(fragment);
+            bindCopyButtons(container);
+        });
+    };
+
     const getCookie = (name) => {
         const cookies = document.cookie ? document.cookie.split(";") : [];
         for (const rawCookie of cookies) {
@@ -66,6 +172,8 @@
                     return;
                 }
                 modalBody.innerHTML = solutionCard.innerHTML;
+                renderMessageBodies(modalBody);
+                bindCopyButtons(modalBody);
                 bindVoteButtons(modalBody);
                 modal.classList.remove("hidden");
             });
@@ -75,6 +183,8 @@
     const bindCardInteractions = (scope) => {
         bindVoteButtons(scope);
         bindModalTriggers(scope);
+        renderMessageBodies(scope);
+        bindCopyButtons(scope);
     };
 
     const insertMention = (username) => {
@@ -114,6 +224,8 @@
     };
 
     bindCardInteractions(document);
+    renderMessageBodies(document);
+    bindCopyButtons(document);
     renderActiveUsers(Array.from(activeUsersList?.querySelectorAll("[data-mention-username]") || []).map((button) => button.dataset.mentionUsername));
 
     if (modalClose) {

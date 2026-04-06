@@ -43,6 +43,15 @@
                 <p class="mt-2 text-lg font-semibold text-white">{{ profile_user.date_joined|date:"M d, Y" }}</p>
             </div>
         </div>
+
+        <div class="mt-8 rounded-3xl border border-white/10 bg-slate-950/60 p-5">
+            <h2 class="text-sm font-semibold uppercase tracking-[0.2em] text-slate-400">Update Username</h2>
+            <form method="POST" class="mt-4 flex flex-col gap-3 sm:flex-row">
+                {% csrf_token %}
+                <input type="text" name="username" value="{{ profile_user.username }}" required class="min-w-0 flex-1 rounded-2xl border border-white/10 bg-slate-950/70 px-4 py-3 text-white placeholder:text-slate-500 focus:border-cyan-400 focus:outline-none">
+                <button type="submit" class="rounded-full bg-cyan-400 px-4 py-3 text-sm font-semibold text-slate-950 hover:bg-cyan-300">Save</button>
+            </form>
+        </div>
     </div>
 
     <div class="space-y-6">

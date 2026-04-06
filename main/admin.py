@@ -27,7 +27,7 @@ class MyAdminSite(AdminSite):
             "emails/verification_email.html",
             {
                 "user": user,
-                "login_link": "http://127.0.0.1:8000/login/",
+                "verification_link": "http://127.0.0.1:8000/verify-email/example-token/",
                 "app_name": "CodeClinic",
             },
         )
