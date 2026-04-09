@@ -1,30 +1,34 @@
 {% load vote_tags %}
-<div id="solution-{{ solution.id }}" data-solution-card data-solution-id="{{ solution.id }}" class="rounded-[1.5rem] border border-cyan-500/30 bg-slate-900/80 p-5 shadow-lg shadow-slate-950/30">
-    <div class="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-        <div class="text-sm text-slate-300">
+<div id="solution-{{ solution.id }}" data-solution-card data-solution-id="{{ solution.id }}" class="rounded-[1rem] border border-white/10 bg-transparent p-4">
+    <div class="flex flex-wrap items-center justify-between gap-3 text-sm text-slate-300 group">
+        <div class="flex flex-wrap items-center gap-3">
             {% if solution.author %}
-                <span>by {{ solution.author.username }}</span>
+                <span class="flex h-8 w-8 items-center justify-center rounded-full border border-cyan-400/30 bg-cyan-400/10 text-xs font-semibold uppercase text-cyan-200">
+                    {{ solution.author.username|default:"U"|slice:":1" }}
+                </span>
+                <span class="font-semibold text-white">{{ solution.author.username }}</span>
             {% endif %}
+            <span class="text-xs text-slate-500">• {{ solution.created_at|date:"M d, Y H:i" }}</span>
             {% if accepted_solution_id == solution.id %}
-                <span class="ml-2 inline-flex rounded-full bg-amber-400/15 px-3 py-1 text-xs font-semibold uppercase tracking-[0.15em] text-amber-300">Accepted Answer</span>
+                <span class="inline-flex rounded-full bg-amber-400/15 px-2 py-1 text-[0.65rem] font-semibold uppercase tracking-[0.15em] text-amber-300">Accepted</span>
             {% endif %}
         </div>
-        <div class="flex flex-wrap items-center gap-2 text-sm text-slate-300">
+        <div class="flex flex-wrap items-center gap-2 text-xs text-slate-300 opacity-0 transition group-hover:opacity-100">
             {% if user == problem.user and accepted_solution_id != solution.id %}
                 <form method="POST" action="{% url 'accept_solution' solution.id %}" class="inline-flex">
                     {% csrf_token %}
-                    <button type="submit" class="rounded-full border border-amber-400/40 px-3 py-2 text-xs font-semibold uppercase tracking-[0.15em] text-amber-300 hover:bg-amber-400/10">Accept</button>
+                    <button type="submit" class="rounded-full border border-amber-400/40 px-3 py-2 text-[0.65rem] font-semibold uppercase tracking-[0.15em] text-amber-300 hover:bg-amber-400/10">Accept</button>
                 </form>
             {% endif %}
             {% if user == solution.author %}
-                <a href="{% url 'edit_solution' solution.id %}" class="rounded-full border border-white/10 px-3 py-2 text-xs font-semibold uppercase tracking-[0.15em] text-slate-200 hover:border-white/30">Edit</a>
-                <a href="{% url 'delete_solution' solution.id %}" class="rounded-full border border-rose-400/30 px-3 py-2 text-xs font-semibold uppercase tracking-[0.15em] text-rose-300 hover:bg-rose-400/10">Delete</a>
+                <a href="{% url 'edit_solution' solution.id %}" class="rounded-full border border-white/10 px-3 py-2 text-[0.65rem] font-semibold uppercase tracking-[0.15em] text-slate-200 hover:border-white/30">Edit</a>
+                <a href="{% url 'delete_solution' solution.id %}" class="rounded-full border border-rose-400/30 px-3 py-2 text-[0.65rem] font-semibold uppercase tracking-[0.15em] text-rose-300 hover:bg-rose-400/10">Delete</a>
             {% endif %}
-            <button class="solution-modal-trigger rounded-full border border-white/10 px-3 py-2 text-xs font-semibold uppercase tracking-[0.15em] text-slate-200 hover:border-cyan-400/40" data-solution-id="{{ solution.id }}">View Full</button>
+            <button class="solution-modal-trigger rounded-full border border-white/10 px-3 py-2 text-[0.65rem] font-semibold uppercase tracking-[0.15em] text-slate-200 hover:border-cyan-400/40" data-solution-id="{{ solution.id }}">View</button>
         </div>
     </div>
-    <div class="mt-4 rounded-2xl bg-slate-950/90 p-4">
-        <div class="max-h-72 space-y-3 overflow-y-auto text-sm text-slate-100" data-message-content data-raw="{{ solution.content|escapejs }}"></div>
+    <div class="mt-3">
+        <div class="max-h-64 space-y-3 overflow-y-auto text-sm text-slate-100" data-message-content data-raw="{{ solution.content|escapejs }}"></div>
     </div>
     <div class="mt-4 flex items-center gap-3 text-sm text-slate-300">
         <button class="rounded-full bg-emerald-500/15 px-3 py-2 hover:bg-emerald-500/25" data-solution-id="{{ solution.id }}" data-vote-type="up">👍</button>

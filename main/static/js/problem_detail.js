@@ -14,6 +14,7 @@
     const isOwner = root.dataset.isOwner === "true";
     const activeUsersList = root.querySelector("[data-active-users-list]");
     const activeUserCount = root.querySelector("[data-active-user-count]");
+    const liveStatus = root.querySelector("[data-live-status]");
     const mentionTargets = () => root.querySelectorAll("[data-mention-target]");
 
     const decodeUnicodeEscapes = (value) =>
@@ -240,6 +241,40 @@
         }
     });
 
+    const insertSolutionCard = ({ html, solutionId }) => {
+        if (!html || !humanSolutionsList) {
+            return;
+        }
+        if (solutionId && document.getElementById(`solution-${solutionId}`)) {
+            return;
+        }
+        if (emptyState) {
+            emptyState.remove();
+        }
+        const wrapper = document.createElement("div");
+        wrapper.innerHTML = html.trim();
+        const card = wrapper.firstElementChild;
+        if (!card) {
+            return;
+        }
+        if (solutionId && !card.id) {
+            card.id = `solution-${solutionId}`;
+        }
+        if (isOwner) {
+            const metaRow = card.querySelector(".solution-modal-trigger")?.parentElement;
+            if (metaRow && !metaRow.querySelector("form")) {
+                const acceptForm = document.createElement("form");
+                acceptForm.method = "POST";
+                acceptForm.action = `/solution/${solutionId}/accept/`;
+                acceptForm.className = "inline-flex";
+                acceptForm.innerHTML = `<input type="hidden" name="csrfmiddlewaretoken" value="${getCookie("csrftoken") || ""}"><button type="submit" class="rounded-full border border-amber-400/40 px-3 py-2 text-xs font-semibold uppercase tracking-[0.15em] text-amber-300 hover:bg-amber-400/10">Accept</button>`;
+                metaRow.prepend(acceptForm);
+            }
+        }
+        humanSolutionsList.prepend(card);
+        bindCardInteractions(card);
+    };
+
     if (humanSolutionForm) {
         humanSolutionForm.addEventListener("submit", async (event) => {
             event.preventDefault();
@@ -254,58 +289,78 @@
                 body: new FormData(humanSolutionForm),
             });
 
+            const data = await response.json().catch(() => ({ error: "Could not share your contribution." }));
             if (!response.ok) {
-                const data = await response.json().catch(() => ({ error: "Could not share your contribution." }));
                 humanSolutionStatus.textContent = data.error || "Could not share your contribution.";
                 return;
             }
 
             humanSolutionForm.reset();
+            if (data.html) {
+                insertSolutionCard({ html: data.html, solutionId: data.solution_id });
+            }
             humanSolutionStatus.textContent = "Contribution shared. It will appear instantly for everyone viewing this page.";
         });
     }
 
     const protocol = window.location.protocol === "https:" ? "wss" : "ws";
-    const socket = new WebSocket(`${protocol}://${window.location.host}${root.dataset.wsPath}`);
+    let socket = null;
+    let reconnectAttempts = 0;
+    let reconnectTimer = null;
 
-    socket.addEventListener("message", (event) => {
-        const data = JSON.parse(event.data);
-        if (data.type === "presence.updated") {
-            renderActiveUsers(data.active_users || []);
+    const connectSocket = () => {
+        if (socket && (socket.readyState === WebSocket.OPEN || socket.readyState === WebSocket.CONNECTING)) {
             return;
         }
-        if (data.type !== "solution.created") {
-            return;
-        }
+        socket = new WebSocket(`${protocol}://${window.location.host}${root.dataset.wsPath}`);
 
-        if (emptyState) {
-            emptyState.remove();
-        }
-
-        const wrapper = document.createElement("div");
-        wrapper.innerHTML = data.html.trim();
-        const card = wrapper.firstElementChild;
-        if (!card) {
-            return;
-        }
-        if (isOwner) {
-            const metaRow = card.querySelector(".solution-modal-trigger")?.parentElement;
-            if (metaRow) {
-                const acceptForm = document.createElement("form");
-                acceptForm.method = "POST";
-                acceptForm.action = `/solution/${data.solution_id}/accept/`;
-                acceptForm.className = "inline-flex";
-                acceptForm.innerHTML = `<input type="hidden" name="csrfmiddlewaretoken" value="${getCookie("csrftoken") || ""}"><button type="submit" class="rounded-full border border-amber-400/40 px-3 py-2 text-xs font-semibold uppercase tracking-[0.15em] text-amber-300 hover:bg-amber-400/10">Accept</button>`;
-                metaRow.prepend(acceptForm);
+        socket.addEventListener("message", (event) => {
+            if (liveStatus) {
+                liveStatus.classList.add("hidden");
             }
-        }
-        humanSolutionsList.prepend(card);
-        bindCardInteractions(card);
-    });
+            const data = JSON.parse(event.data);
+            if (data.type === "presence.updated") {
+                renderActiveUsers(data.active_users || []);
+                return;
+            }
+            if (data.type !== "solution.created") {
+                return;
+            }
 
-    socket.addEventListener("close", () => {
-        if (humanSolutionStatus && !humanSolutionStatus.textContent) {
-            humanSolutionStatus.textContent = "Live updates are temporarily offline. Refresh the page if you need the latest answers.";
+            insertSolutionCard({ html: data.html, solutionId: data.solution_id });
+        });
+
+        socket.addEventListener("close", () => {
+            if (liveStatus) {
+                liveStatus.classList.remove("hidden");
+            }
+            if (humanSolutionStatus && !humanSolutionStatus.textContent) {
+                humanSolutionStatus.textContent = "Live updates are temporarily offline. Refresh the page if you need the latest answers.";
+            }
+            if (reconnectTimer) {
+                return;
+            }
+            reconnectAttempts += 1;
+            const delay = Math.min(8000, 500 * reconnectAttempts);
+            reconnectTimer = setTimeout(() => {
+                reconnectTimer = null;
+                connectSocket();
+            }, delay);
+        });
+
+        socket.addEventListener("open", () => {
+            reconnectAttempts = 0;
+            if (liveStatus) {
+                liveStatus.classList.add("hidden");
+            }
+        });
+    };
+
+    connectSocket();
+
+    document.addEventListener("visibilitychange", () => {
+        if (document.visibilityState === "visible") {
+            connectSocket();
         }
     });
 })();

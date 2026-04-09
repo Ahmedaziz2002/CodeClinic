@@ -31,4 +31,14 @@ PY
 fi
 
 python manage.py collectstatic --noinput
-exec uvicorn core.asgi:application --host 0.0.0.0 --port 8000 --workers ${UVICORN_WORKERS:-3}
+
+WORKERS=${UVICORN_WORKERS:-}
+if [ -z "$WORKERS" ]; then
+  if [ "$USE_REDIS_CHANNELS" = "true" ] || [ "$USE_REDIS_CHANNELS" = "1" ]; then
+    WORKERS=3
+  else
+    WORKERS=1
+  fi
+fi
+
+exec uvicorn core.asgi:application --host 0.0.0.0 --port 8000 --workers ${WORKERS}

@@ -10,7 +10,7 @@ logger = logging.getLogger(__name__)
 
 
 @transaction.atomic
-def create_human_solution(*, problem: Problem, author, content: str, request) -> Solution:
+def create_human_solution(*, problem: Problem, author, content: str, request):
     solution = Solution.objects.create(
         problem=problem,
         content=content.strip(),
@@ -51,4 +51,4 @@ def create_human_solution(*, problem: Problem, author, content: str, request) ->
         except Exception:
             logger.exception("Live contribution broadcast failed for problem %s", problem.id)
 
-    return solution
+    return solution, rendered_card
