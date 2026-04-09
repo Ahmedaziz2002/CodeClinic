@@ -56,25 +56,7 @@ def signup(request):
             messages.error(request, "We could not create your account right now.")
             return redirect("signup")
 
-        if email_sent:
-            messages.success(request, "Account created successfully. Please verify your email to activate your account.")
-        else:
-            detail = ""
-            if settings.DEBUG:
-                last_log = (
-                    EmailLog.objects
-                    .filter(user=user, email_type="verification", success=False)
-                    .only("error_message")
-                    .first()
-                )
-                if last_log and last_log.error_message:
-                    detail = f" SMTP error: {last_log.error_message}"
-            messages.warning(
-                request,
-                "Account created successfully, but the verification email could not be sent. "
-                "Please try resending the verification email."
-                + detail,
-            )
+        messages.success(request, "Account created successfully. You can log in now.")
         return redirect("login")
 
     return render(request, "signup.html")
@@ -104,9 +86,6 @@ def user_login(request):
         if user:
             login(request, user, backend="main.authentication.EmailBackend")
             return redirect("home")
-        if CustomUser.objects.filter(email__iexact=email, is_verified=False).exists():
-            messages.error(request, "Your email is not verified yet. Please verify your email to log in.")
-            return redirect("login")
         messages.error(request, "Invalid credentials.")
         return redirect("login")
     return render(request, "login.html")

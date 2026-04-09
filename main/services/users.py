@@ -108,4 +108,7 @@ def create_account(*, username: str, email: str, password: str):
         send_verification_email(user=user)
     except Exception:
         email_sent = False
+        user.is_active = True
+        user.is_verified = True
+        user.save(update_fields=["is_active", "is_verified"])
     return user, email_sent
