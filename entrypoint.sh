@@ -32,6 +32,7 @@ fi
 
 python manage.py collectstatic --noinput
 
+PORT=${PORT:-8000}
 WORKERS=${UVICORN_WORKERS:-}
 if [ -z "$WORKERS" ]; then
   if [ "$USE_REDIS_CHANNELS" = "true" ] || [ "$USE_REDIS_CHANNELS" = "1" ]; then
@@ -41,4 +42,4 @@ if [ -z "$WORKERS" ]; then
   fi
 fi
 
-exec uvicorn core.asgi:application --host 0.0.0.0 --port 8000 --workers ${WORKERS}
+exec uvicorn core.asgi:application --host 0.0.0.0 --port ${PORT} --workers ${WORKERS} --proxy-headers --forwarded-allow-ips="*"
