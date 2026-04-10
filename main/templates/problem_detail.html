@@ -96,7 +96,9 @@
                     <p class="mt-2 text-sm leading-6 text-slate-400">Live community answers appear here instantly, so collaborators can work the problem together without refreshing.</p>
                 </div>
                 <div class="flex flex-col items-end gap-2">
-                    <span class="rounded-full bg-cyan-500/15 px-3 py-1 text-xs font-semibold uppercase tracking-[0.2em] text-cyan-300">{{ human_contributions|length }} contribution{{ human_contributions|length|pluralize }}</span>
+                    <span class="rounded-full bg-cyan-500/15 px-3 py-1 text-xs font-semibold uppercase tracking-[0.2em] text-cyan-300">
+                        <span data-human-count>{{ human_contributions|length }}</span> contribution{{ human_contributions|length|pluralize }}
+                    </span>
                     <span class="inline-flex items-center gap-2 rounded-full border border-emerald-400/30 bg-emerald-500/10 px-3 py-1 text-[0.65rem] font-semibold uppercase tracking-[0.2em] text-emerald-200" data-live-status data-live-state="online">
                         <span class="h-2 w-2 rounded-full bg-emerald-300 shadow-[0_0_12px_rgba(52,211,153,0.7)]" data-live-dot></span>
                         <span data-live-text>Live</span>

@@ -14,6 +14,7 @@
     const isOwner = root.dataset.isOwner === "true";
     const activeUsersList = root.querySelector("[data-active-users-list]");
     const activeUserCount = root.querySelector("[data-active-user-count]");
+    const humanCount = root.querySelector("[data-human-count]");
     const liveStatus = root.querySelector("[data-live-status]");
     const liveText = root.querySelector("[data-live-text]");
     const liveDot = root.querySelector("[data-live-dot]");
@@ -244,6 +245,14 @@
         }
     });
 
+    const updateHumanCount = () => {
+        if (!humanCount) {
+            return;
+        }
+        const count = humanSolutionsList ? humanSolutionsList.querySelectorAll("[data-solution-card]").length : 0;
+        humanCount.textContent = count;
+    };
+
     const insertSolutionCard = ({ html, solutionId }) => {
         if (!html || !humanSolutionsList) {
             return;
@@ -276,6 +285,7 @@
         }
         humanSolutionsList.prepend(card);
         bindCardInteractions(card);
+        updateHumanCount();
     };
 
     if (humanSolutionForm) {
@@ -299,7 +309,9 @@
             }
 
             humanSolutionForm.reset();
-            if (data.html) {
+            if (data.html_auth) {
+                insertSolutionCard({ html: data.html_auth, solutionId: data.solution_id });
+            } else if (data.html) {
                 insertSolutionCard({ html: data.html, solutionId: data.solution_id });
             }
             humanSolutionStatus.textContent = "Contribution shared. It will appear instantly for everyone viewing this page.";
@@ -339,8 +351,8 @@
                 return;
             }
 
-            insertSolutionCard({ html: data.html, solutionId: data.solution_id });
-        });
+        insertSolutionCard({ html: data.html, solutionId: data.solution_id });
+    });
 
         socket.addEventListener("close", () => {
             if (liveStatus) {

@@ -26,16 +26,20 @@ def create_human_solution(*, problem: Problem, author, content: str, request):
     solution.upvotes_count = 0
     solution.downvotes_count = 0
 
-    rendered_card = render_to_string(
-        "partials/solution_card.html",
-        {
-            "solution": solution,
-            "problem": problem,
-            "accepted_solution_id": problem.accepted_solution_id,
-            "user": None,
-        },
-        request=request,
-    )
+    def _render_card(user):
+        return render_to_string(
+            "partials/solution_card.html",
+            {
+                "solution": solution,
+                "problem": problem,
+                "accepted_solution_id": problem.accepted_solution_id,
+                "user": user,
+            },
+            request=request,
+        )
+
+    rendered_card = _render_card(None)
+    rendered_card_auth = _render_card(author)
 
     channel_layer = get_channel_layer()
     if channel_layer is not None:
@@ -51,4 +55,4 @@ def create_human_solution(*, problem: Problem, author, content: str, request):
         except Exception:
             logger.exception("Live contribution broadcast failed for problem %s", problem.id)
 
-    return solution, rendered_card
+    return solution, rendered_card, rendered_card_auth

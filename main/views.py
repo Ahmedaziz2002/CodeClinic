@@ -229,10 +229,17 @@ def add_human_solution(request, problem_id):
         messages.error(request, error_message)
         return redirect("problem_detail", problem_id=problem_id)
 
-    solution, rendered_card = create_human_solution(problem=problem, author=request.user, content=content, request=request)
+    solution, rendered_card, rendered_card_auth = create_human_solution(
+        problem=problem, author=request.user, content=content, request=request
+    )
     if request.headers.get("x-requested-with") == "XMLHttpRequest":
         return JsonResponse(
-            {"message": "Contribution submitted.", "solution_id": solution.id, "html": rendered_card},
+            {
+                "message": "Contribution submitted.",
+                "solution_id": solution.id,
+                "html": rendered_card,
+                "html_auth": rendered_card_auth,
+            },
             status=201,
         )
 
