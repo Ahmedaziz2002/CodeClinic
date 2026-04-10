@@ -42,4 +42,5 @@ if [ -z "$WORKERS" ]; then
   fi
 fi
 
+echo "Starting uvicorn on port ${PORT} with workers ${WORKERS}"
 exec uvicorn core.asgi:application --host 0.0.0.0 --port ${PORT} --workers ${WORKERS} --proxy-headers --forwarded-allow-ips="*"
