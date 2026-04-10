@@ -24,6 +24,7 @@ from .services import (
     create_human_solution,
     create_problem_with_ai_response,
     get_problem_detail_context,
+    list_problem_topics,
     list_recent_problems,
     send_password_reset_email,
     send_verification_email,
@@ -288,7 +289,16 @@ def delete_solution(request, solution_id):
 
 
 def home(request):
-    return render(request, "index.html", {"problems": list_recent_problems()})
+    query = request.GET.get("q", "").strip()
+    status = request.GET.get("status", "all").strip().lower()
+    topic = request.GET.get("topic", "all").strip()
+    problems = list_recent_problems(query=query or None, status=status or None, topic=topic or None)
+    context = {
+        "problems": problems,
+        "filters": {"q": query, "status": status, "topic": topic},
+        "topics": list_problem_topics(),
+    }
+    return render(request, "index.html", context)
 
 
 @login_required(login_url="login")

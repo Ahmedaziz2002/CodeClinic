@@ -15,6 +15,8 @@
     const activeUsersList = root.querySelector("[data-active-users-list]");
     const activeUserCount = root.querySelector("[data-active-user-count]");
     const liveStatus = root.querySelector("[data-live-status]");
+    const liveText = root.querySelector("[data-live-text]");
+    const liveDot = root.querySelector("[data-live-dot]");
     const mentionTargets = () => root.querySelectorAll("[data-mention-target]");
 
     const decodeUnicodeEscapes = (value) =>
@@ -208,12 +210,13 @@
         if (!activeUsersList || !activeUserCount) {
             return;
         }
-        activeUserCount.textContent = users.length;
-        if (!users.length) {
+        const uniqueUsers = Array.from(new Set(users.filter(Boolean)));
+        activeUserCount.textContent = uniqueUsers.length;
+        if (!uniqueUsers.length) {
             activeUsersList.innerHTML = '<p class="text-sm text-slate-500">No one else is active in this thread yet.</p>';
             return;
         }
-        activeUsersList.innerHTML = users
+        activeUsersList.innerHTML = uniqueUsers
             .map(
                 (username) =>
                     `<button type="button" class="rounded-full border border-cyan-400/30 px-3 py-2 text-sm text-cyan-300 hover:bg-cyan-400/10" data-mention-username="${username}">@${username}</button>`
@@ -316,7 +319,16 @@
 
         socket.addEventListener("message", (event) => {
             if (liveStatus) {
-                liveStatus.classList.add("hidden");
+                liveStatus.dataset.liveState = "online";
+                liveStatus.classList.remove("border-amber-400/40", "bg-amber-400/10", "text-amber-200");
+                liveStatus.classList.add("border-emerald-400/30", "bg-emerald-500/10", "text-emerald-200");
+            }
+            if (liveText) {
+                liveText.textContent = "Live";
+            }
+            if (liveDot) {
+                liveDot.classList.remove("bg-amber-300", "shadow-[0_0_12px_rgba(251,191,36,0.7)]");
+                liveDot.classList.add("bg-emerald-300", "shadow-[0_0_12px_rgba(52,211,153,0.7)]");
             }
             const data = JSON.parse(event.data);
             if (data.type === "presence.updated") {
@@ -332,7 +344,16 @@
 
         socket.addEventListener("close", () => {
             if (liveStatus) {
-                liveStatus.classList.remove("hidden");
+                liveStatus.dataset.liveState = "offline";
+                liveStatus.classList.remove("border-emerald-400/30", "bg-emerald-500/10", "text-emerald-200");
+                liveStatus.classList.add("border-amber-400/40", "bg-amber-400/10", "text-amber-200");
+            }
+            if (liveText) {
+                liveText.textContent = "Offline";
+            }
+            if (liveDot) {
+                liveDot.classList.remove("bg-emerald-300", "shadow-[0_0_12px_rgba(52,211,153,0.7)]");
+                liveDot.classList.add("bg-amber-300", "shadow-[0_0_12px_rgba(251,191,36,0.7)]");
             }
             if (humanSolutionStatus && !humanSolutionStatus.textContent) {
                 humanSolutionStatus.textContent = "Live updates are temporarily offline. Refresh the page if you need the latest answers.";
@@ -351,7 +372,16 @@
         socket.addEventListener("open", () => {
             reconnectAttempts = 0;
             if (liveStatus) {
-                liveStatus.classList.add("hidden");
+                liveStatus.dataset.liveState = "online";
+                liveStatus.classList.remove("border-amber-400/40", "bg-amber-400/10", "text-amber-200");
+                liveStatus.classList.add("border-emerald-400/30", "bg-emerald-500/10", "text-emerald-200");
+            }
+            if (liveText) {
+                liveText.textContent = "Live";
+            }
+            if (liveDot) {
+                liveDot.classList.remove("bg-amber-300", "shadow-[0_0_12px_rgba(251,191,36,0.7)]");
+                liveDot.classList.add("bg-emerald-300", "shadow-[0_0_12px_rgba(52,211,153,0.7)]");
             }
         });
     };

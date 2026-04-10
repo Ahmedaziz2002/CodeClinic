@@ -49,11 +49,26 @@
     </div>
 </section>
 
-<section id="recent-threads" class="mt-10">
-    <div class="mb-4 flex items-center justify-between">
+<section id="recent-threads" class="mt-10 space-y-4">
+    <div class="flex flex-wrap items-center justify-between gap-3">
         <h3 class="text-2xl font-semibold text-white">Recent Projects</h3>
         <span class="text-sm text-slate-400">{{ problems|length }} active thread{{ problems|length|pluralize }}</span>
     </div>
+    <form method="GET" class="grid gap-3 rounded-[1.5rem] border border-white/10 bg-slate-900/70 p-4 shadow-lg shadow-slate-950/30 md:grid-cols-[1.5fr_0.6fr_0.8fr_auto]">
+        <input type="text" name="q" value="{{ filters.q }}" placeholder="Search by problem description..." class="w-full rounded-2xl border border-white/10 bg-slate-950/80 px-4 py-3 text-sm text-slate-100 placeholder:text-slate-500 focus:border-cyan-400 focus:outline-none">
+        <select name="status" class="w-full rounded-2xl border border-white/10 bg-slate-950/80 px-4 py-3 text-sm text-slate-200 focus:border-cyan-400 focus:outline-none">
+            <option value="all" {% if filters.status == "all" %}selected{% endif %}>All status</option>
+            <option value="open" {% if filters.status == "open" %}selected{% endif %}>Open</option>
+            <option value="resolved" {% if filters.status == "resolved" %}selected{% endif %}>Resolved</option>
+        </select>
+        <select name="topic" class="w-full rounded-2xl border border-white/10 bg-slate-950/80 px-4 py-3 text-sm text-slate-200 focus:border-cyan-400 focus:outline-none">
+            <option value="all" {% if filters.topic == "all" %}selected{% endif %}>All topics</option>
+            {% for topic in topics %}
+                <option value="{{ topic }}" {% if filters.topic == topic %}selected{% endif %}>{{ topic }}</option>
+            {% endfor %}
+        </select>
+        <button type="submit" class="rounded-2xl bg-cyan-400 px-5 py-3 text-sm font-semibold text-slate-950 transition hover:-translate-y-0.5 hover:bg-cyan-300">Filter</button>
+    </form>
     <div class="grid gap-4 lg:grid-cols-2">
         {% for problem in problems %}
             <article class="rounded-[1.5rem] border border-white/10 bg-slate-900/70 p-6 transition hover:border-cyan-400/50 hover:bg-slate-900">
@@ -67,12 +82,16 @@
                         {{ problem.description|truncatechars:90 }}
                     </a>
                 </h4>
-                <div class="mt-4 flex items-center justify-between text-sm text-slate-400">
-                    <span>By {{ problem.user.username }}</span>
-                    <div class="flex items-center gap-3">
+                <div class="mt-4 flex flex-wrap items-center justify-between gap-3 text-sm text-slate-400">
+                    <div class="flex flex-wrap items-center gap-2 text-xs">
+                        <span class="rounded-full border border-cyan-400/20 bg-cyan-400/10 px-2.5 py-1 text-cyan-200">{{ problem.ai_turn_count|default:0 }} AI turns</span>
+                        <span class="rounded-full border border-white/10 bg-white/[0.03] px-2.5 py-1 text-slate-300">{{ problem.solution_count|default:0 }} human replies</span>
                         {% if problem.accepted_solution_id %}
-                            <span class="rounded-full bg-emerald-500/10 px-2 py-1 text-xs text-emerald-300">Resolved</span>
+                            <span class="rounded-full bg-emerald-500/10 px-2.5 py-1 text-emerald-300">Resolved</span>
                         {% endif %}
+                    </div>
+                    <div class="flex items-center gap-3">
+                        <span>By {{ problem.user.username }}</span>
                         <a href="{% url 'problem_detail' problem.id %}" class="font-medium text-cyan-300 hover:text-cyan-200">Open</a>
                     </div>
                 </div>
