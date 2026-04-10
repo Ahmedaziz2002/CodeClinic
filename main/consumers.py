@@ -1,7 +1,11 @@
+import logging
+
 from channels.db import database_sync_to_async
 from channels.generic.websocket import AsyncJsonWebsocketConsumer
 
 from .models import ProblemPresence
+
+logger = logging.getLogger(__name__)
 
 
 class ProblemConsumer(AsyncJsonWebsocketConsumer):
@@ -12,12 +16,14 @@ class ProblemConsumer(AsyncJsonWebsocketConsumer):
         if self.scope["user"].is_authenticated:
             await self._upsert_presence()
         await self.accept()
+        logger.info("WebSocket connected: problem=%s user=%s channel=%s", self.problem_id, self.scope.get("user"), self.channel_name)
         await self._broadcast_active_users()
 
     async def disconnect(self, close_code):
         if self.scope["user"].is_authenticated:
             await self._remove_presence()
         await self.channel_layer.group_discard(self.group_name, self.channel_name)
+        logger.info("WebSocket disconnected: problem=%s channel=%s code=%s", self.problem_id, self.channel_name, close_code)
         await self._broadcast_active_users()
 
     async def solution_created(self, event):
