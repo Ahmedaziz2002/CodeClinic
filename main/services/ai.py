@@ -25,6 +25,9 @@ VALID_TOPICS = {
     "Binary Search",
     "Graphs",
     "Dynamic Programming",
+    "Greedy",
+    "Optimization",
+    "Complexity",
     "Sorting",
     "Hashmaps",
     "Recursion",
@@ -57,7 +60,9 @@ def _generate_topic(description: str) -> str:
         contents=(
             "Classify coding problems into exactly one topic from this list: "
             "Arrays, Strings, Math, Binary Search, Graphs, Dynamic Programming, "
-            "Sorting, Hashmaps, Recursion, Trees, Uncategorized. "
+            "Greedy, Optimization, Complexity, Sorting, Hashmaps, Recursion, Trees, Uncategorized. "
+            "If the question is about performance, time/space complexity, or optimization, "
+            "return Optimization or Complexity. "
             "Return only the topic name.\n\n"
             f"{description}"
         ),
@@ -67,7 +72,39 @@ def _generate_topic(description: str) -> str:
         ),
     )
     topic = (completion.text or "Uncategorized").strip()
-    return topic if topic in VALID_TOPICS else "Uncategorized"
+    if topic in VALID_TOPICS:
+        return topic
+
+    topic_lower = topic.lower()
+    keyword_map = {
+        "optimiz": "Optimization",
+        "performance": "Optimization",
+        "complexity": "Complexity",
+        "big o": "Complexity",
+        "big-o": "Complexity",
+        "greedy": "Greedy",
+        "dp": "Dynamic Programming",
+        "dynamic programming": "Dynamic Programming",
+        "graph": "Graphs",
+        "tree": "Trees",
+        "hash": "Hashmaps",
+        "sort": "Sorting",
+        "array": "Arrays",
+        "string": "Strings",
+        "binary search": "Binary Search",
+        "recursion": "Recursion",
+        "math": "Math",
+    }
+    for key, mapped in keyword_map.items():
+        if key in topic_lower:
+            return mapped
+
+    description_lower = description.lower()
+    for key, mapped in keyword_map.items():
+        if key in description_lower:
+            return mapped
+
+    return "Uncategorized"
 
 
 def _generate_assistant_reply(thread: Thread) -> str:
